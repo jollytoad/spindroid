@@ -1,0 +1,180 @@
+# Phase 1 - Source Mode
+
+## Goal
+
+Deliver the first working app. The phone captures audio and sends it to a
+SendSpin server. Music Assistant shows the phone under Live Inputs, and the
+user plays the phone's audio on any speaker or group.
+
+This phase delivers the goal of the project on its own. Phase 2 is optional
+extra work.
+
+## Deliverables
+
+1. A client session that offers the `source@v1` role.
+2. A capture screen that offers the system audio mode and the microphone mode.
+3. A pairing screen that shows the pairing token.
+4. A foreground service that keeps the app alive while it streams.
+5. A status screen that shows the connection, the pairing state, and the
+   stream state.
+
+## Tasks
+
+### 1. The client session
+
+1. Write the session class. It owns the WebSocket, the Noise channel, the
+   clock filter, and the source state.
+2. Write the dial-out path:
+   - Open the WebSocket to `ws://host:8927/sendspin`.
+   - Reconnect with exponential backoff.
+3. Write the handshake path:
+   - Send `client/init` with the `client_id`, the version `1`, and the suite
+     `25519_ChaChaPoly_SHA256`.
+   - Read `server/init`. Stop on `server/error`.
+   - Read Noise message 1. Choose the PSK. Send Noise message 2 with the
+     payload `{}`.
+4. Write the hello path:
+   - On `server/hello`, read the server name and the supported source codecs.
+   - Send `client/hello` with the name, the device info, the supported roles,
+     the source support object, the supported pair methods, and the unpaired
+     access setting.
+   - On `server/activate`, record the active roles and the activities.
+5. Write the clock sync loop. Use the burst strategy from the clock filter.
+6. Write the state reporting. Send `client/state` with `available` and the
+   `source` object. Report `available: true` only after the filter converges.
+7. Write the source role:
+   - On `server/command` with `source.command` set to `start`, set a flag. The
+     stream opens with the next captured block.
+   - On the first captured block after the flag, send `client-stream/start`.
+     The format must be one of the codecs the server listed.
+   - Send audio chunks. Keep each chunk between 5 ms and 150 ms.
+   - On `server/command` with `source.command` set to `stop`, send
+     `client-stream/end` if the stream is open.
+   - When the source role leaves `active_roles`, stop sending and send
+     `client-stream/end`.
+8. Write the goodbye path. Send `client/goodbye` and close the WebSocket.
+9. Handle the re-handshake. The prologue is the previous handshake hash.
+10. Ignore unknown message types and unknown payload fields.
+
+### 2. Pairing
+
+1. Generate the identity key pair on first run. Store the private key in
+   EncryptedSharedPreferences.
+2. Generate the pairing PSK on first run. Store it in
+   EncryptedSharedPreferences. The spec says it must not be a fixed default
+   shared across devices.
+3. Build the pairing token. The payload is the client public key, then the
+   pairing PSK.
+4. Show the token on a screen. Offer a copy button and a QR code.
+5. Handle the pairing flow. On a `server/activate` with
+   `pairing.method` set to `pairing_psk`:
+   - Check that the matched PSK is the pairing PSK. Abort with
+     `method_not_supported` otherwise.
+   - Generate a new long-term PSK.
+   - Send `client/pair-init` and `client/pair-finalize` back to back.
+   - On `server/pair-finalize`, store the pairing record for the server.
+6. Handle `server/unpair` by removing the record.
+7. Keep the pairing token stable. The pairing PSK never changes, so the token
+   never changes.
+
+### 3. Capture
+
+1. Write a capture interface. It produces PCM blocks with a capture timestamp.
+2. Write the system audio capture:
+   - Request `RECORD_AUDIO` at runtime.
+   - Show the MediaProjection consent prompt.
+   - Start the foreground service of type `mediaProjection` before calling
+     `getMediaProjection()`.
+   - Build the `AudioPlaybackCaptureConfiguration` with the matched usages
+     `USAGE_MEDIA`, `USAGE_GAME`, and `USAGE_UNKNOWN`.
+   - Build the `AudioRecord` with `setAudioPlaybackCaptureConfig`.
+   - Register a `MediaProjection.Callback` and stop the capture on `onStop`.
+3. Write the microphone capture:
+   - Request `RECORD_AUDIO` at runtime.
+   - Use the foreground service of type `microphone`.
+   - Use an `AudioRecord` with a voice source that avoids the AGC, so the
+     signal stays flat.
+4. Write the resampler. The capture rate and the announced rate may differ.
+   The server resamples, so the app must send one rate consistently. Pick the
+   capture rate and announce it. The plan uses 48 kHz, 16-bit, stereo, which
+   costs about 192 kB/s.
+5. Write the backlog guard. When the network stalls, drop audio older than a
+   small bound and resume from live capture. Use the same bound as the
+   reference implementation: 500 ms.
+
+### 4. The foreground service
+
+1. Declare the service with the types `mediaProjection` and `microphone`.
+2. Declare the permissions `FOREGROUND_SERVICE`,
+   `FOREGROUND_SERVICE_MEDIA_PROJECTION`, `FOREGROUND_SERVICE_MICROPHONE`, and
+   `POST_NOTIFICATIONS`.
+3. Ask for `POST_NOTIFICATIONS` at runtime. Android 13 made it a runtime
+   permission. The service must work without it, but the notification stays
+   hidden.
+4. Post a notification that shows the current state. The user must be able to
+   stop the stream from the notification.
+5. Keep the service alive while the session is active.
+
+### 5. The user interface
+
+The interface stays minimal. It shows only what the user needs to pair, to
+capture, and to see the state.
+
+1. Write the main screen. It shows the Music Assistant address, the connect
+   button, the capture source picker, and the status line.
+2. Write the pairing section. It shows the token, a copy button, and a QR
+   code.
+3. Write the status panel. It shows:
+   - The server name and the connection state.
+   - The pairing state and the paired server names.
+   - The clock error in microseconds.
+   - The stream state and whether the server asked for audio.
+4. Save the settings. Store the server address, the capture source, and the
+   cipher suite.
+
+### 6. Discovery, part one
+
+1. Register `_sendspin._tcp.local.` with NsdManager when the user chooses
+   "accept incoming".
+2. Stop the registration when the user chooses "dial out". The spec forbids
+   doing both at once.
+3. Listen for incoming WebSocket connections on the local port and run a
+   source session for each. Apply the priority rules from the spec: one
+   admitted connection at a time, ranked by activity.
+
+### 7. Music Assistant specifics
+
+1. Dial `ws://<ma-host>:8927/sendspin`. The port is the SendSpin port, not
+   the Music Assistant web port.
+2. Write the pairing instructions into the app. The user pastes the token into
+   the Music Assistant pairing screen.
+3. Tell the user where to find the input. The phone appears under **Live
+   Inputs** in Music Assistant, once the SendSpin Source plugin is active.
+4. Handle the case where Music Assistant has not approved the client yet. The
+   server holds the connection at empty activities until the operator approves
+   it. Show that state in the status panel.
+
+## Exit criteria
+
+1. The app builds and installs on a physical device running Android 13 or
+   later.
+2. Music Assistant shows the phone under Live Inputs after the user pastes the
+   pairing token.
+3. The user can select the phone as an input in Music Assistant, and the audio
+   plays on a speaker.
+4. The clock error settles below 1 ms in the status panel.
+5. The app survives a screen-off and a network drop. It reconnects on its own.
+6. The app uses AES-GCM by default and falls back to ChaCha-Poly on a device
+   without hardware AES.
+
+## Risks
+
+| Risk | Response |
+| --- | --- |
+| The system audio capture returns silence on the test device | Test this in the first week. Many Android 14 devices block it. Keep the microphone mode as a fallback. |
+| DRM apps produce silence | Document the limit in the app. Show the capture level in the status panel. |
+| The MediaProjection consent flow fails on Android 14 and higher | Start the foreground service before `getMediaProjection()`. Test on API 34. |
+| The clock never converges | Check the burst strategy and the burst interval. The spec wants bursts no more than 10 seconds apart. |
+| The app is killed in the background | Use a foreground service. Test with the battery saver on. |
+| The hardware AES benchmark picks the wrong suite | The two suites both work. A wrong pick costs performance, not correctness. |
+| The notification stays hidden | Android 13 made `POST_NOTIFICATIONS` a runtime permission. Ask for it. The service works either way. |

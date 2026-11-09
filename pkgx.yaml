@@ -1,0 +1,23 @@
+# Toolchain for the Android app.
+#
+#   pkgx dev              install and activate these tools for this project
+#   pkgx dev --shellcode  the same, but for the current shell only
+#
+# The Android SDK comes from Homebrew, not from here. See plans/toolchain.md.
+
+dependencies:
+  # Build
+  openjdk.org: ^21
+  gradle.org: ^9
+  kotlinlang.org: ^2
+  gnu.org/make: latest
+
+  # Reference server and conformance harness for the protocol tests
+  python.org: ^3
+  astral.sh/uv: latest
+
+  # Repository and inspection
+  git-scm.org: latest
+  openssl.org: ^3
+  stedolan.github.io/jq: latest
+  curl.se: latest
