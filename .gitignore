@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+build/
+local.properties
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+.cxx/
+
+# The Android preferences folder used inside the sandbox.
+.android-home/
+
+# Scratch space for the reference implementations and the test vectors.
+.tmp/
+
+# Editors and systems
+.idea/
+*.iml
+.DS_Store

@@ -9,6 +9,68 @@ The core is the risk in this project. The Noise handshake, the clock filter,
 and the message framing carry most of the difficulty. This phase removes that
 risk before any Android work starts.
 
+## Status
+
+The phase is complete. Every task below is done, and the exit criteria all
+hold. The test suite has 123 tests, and it runs on the JVM without an
+emulator.
+
+| Deliverable | Where |
+| --- | --- |
+| The project layout | `settings.gradle.kts`, `build.gradle.kts`, `app`, `sendspin-protocol` |
+| The `KKpsk2` handshake, both roles, both suites | `sendspin-protocol/src/main/kotlin/com/sendspin/protocol/noise/` |
+| The clock filter | `sendspin-protocol/src/main/kotlin/com/sendspin/protocol/time/` |
+| The message types and the binary framing | `sendspin-protocol/src/main/kotlin/com/sendspin/protocol/protocol/` |
+| The pairing token and the PSK store | `.../pairing/`, `.../psk/` |
+
+### Notes on what the work found
+
+Five things were harder than they looked, and each one is now covered by a
+test.
+
+1. **The cipher has to be initialised in the right mode.** The first version
+   of `CipherState` always used the encrypt mode, so a decryption encrypted
+   the ciphertext instead of opening it. The Noise vectors caught it.
+
+2. **The `se` token of the second handshake message is `DH(s, re)`.** The
+   initiator mixes its own static key with the responder's ephemeral key. The
+   official vectors caught the wrong order.
+
+3. **The X25519 byte order is the raw little-endian form.** The Java API
+   uses a big-endian `BigInteger` for the u-coordinate and returns an X.509
+   wrapper from `getEncoded()`. The code keeps the raw bytes and uses the
+   DER-wrapped key specs, which Android's Conscrypt accepts as well. See
+   [toolchain.md](toolchain.md).
+
+4. **The clock filter rounds halves away from zero.** The C++ reference
+   rounds that way, and the result has to match it to the microsecond.
+
+5. **A missing field and a field that is null are different.** The
+   specification says that omitting a role object leaves that role's state
+   unchanged, while setting it to `null` clears it. A plain nullable field
+   cannot carry that difference, so the state messages use `JsonOptional`,
+   which holds three states. See
+   `protocol/JsonOptional.kt`.
+
+### The vectors that pin the implementation
+
+| What | Where it comes from |
+| --- | --- |
+| The `KKpsk2` handshake and the transport messages | The `cacophony` corpus, for both cipher suites |
+| X25519 | RFC 7748, sections 5.2 and 6.1 |
+| The pairing token | The reference vectors in the pairing section of the specification |
+| The clock filter | The C++ reference in the `Sendspin/time-filter` repository |
+| The PSK identifier and the sentinel key | The constants in the specification |
+
+### Other SendSpin implementations
+
+The `Sendspin/sendspin-jvm` repository is a player-role client library. It
+has no Noise layer, no pairing and no source role, so the crypto and the
+framing here are its own work. Its clock filter is worth reading, because it
+seeds the filter differently, on purpose: the reference algorithm assumes the
+first innovation is small, which holds when the measurements come from the
+`client/time` exchange but not when they come from a monotonic clock.
+
 ## Deliverables
 
 1. A Gradle project with a `sendspin-protocol` module and an `app` module.
@@ -77,14 +139,25 @@ risk before any Android work starts.
 
 ### 4. The `KKpsk2` handshake
 
+The pattern is the one the Noise specification gives:
+
+```
+KKpsk2:
+  -> s
+  <- s
+  ...
+  -> e, es, ss
+  <- e, ee, se, psk
+```
+
 1. Write the initiator side.
-   - Message 1 carries the tokens `e` and `es`.
-   - Message 2 carries the tokens `e`, `ee`, and `psk2`.
+   - Message 1 carries the tokens `e`, `es` and `ss`.
+   - Message 2 carries the tokens `e`, `ee`, `se` and `psk`.
 2. Write the responder side.
    - Read message 1 and decrypt the payload. The key at this point does not
      depend on the PSK.
    - Read `psk_id` and `psk_category` from the payload.
-   - Choose the PSK. Write message 2 with the `psk2` token.
+   - Choose the PSK. Write message 2 with the `psk` token.
 3. Support a custom prologue. The prologue is the raw bytes of `client/init`
    followed by the raw bytes of `server/init`.
 4. Support a re-handshake. The prologue is the previous handshake hash.
@@ -92,6 +165,11 @@ risk before any Android work starts.
    identifier later.
 6. Test against the official `KKpsk2` test vectors. The output must match byte
    for byte.
+
+The `psk` token sits at the end of the second message, so the responder learns
+which key to use from the payload of the first message. The `se` token of the
+second message mixes the initiator's static key with the responder's ephemeral
+key, which is `DH(s, re)`.
 
 ### 5. The clock filter
 
@@ -158,12 +236,15 @@ risk before any Android work starts.
 
 ## Exit criteria
 
-1. `./gradlew :sendspin-protocol:test` passes.
+All six criteria hold.
+
+1. `./gradlew :sendspin-protocol:test` passes. It runs 123 tests.
 2. The Noise tests match the official vectors byte for byte.
 3. Both cipher suites pass the vectors.
 4. The clock filter tests pass.
 5. The token tests match the reference vector.
-6. The protocol module has no Android dependency.
+6. The protocol module has no Android dependency. It builds as a plain
+   Kotlin/JVM library, with only Moshi on its compile classpath.
 
 ## Risks
 
