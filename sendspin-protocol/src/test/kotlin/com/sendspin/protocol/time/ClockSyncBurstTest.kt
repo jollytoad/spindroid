@@ -17,7 +17,7 @@ class ClockSyncBurstTest {
     fun `holds the measurement until the burst is complete`() {
         val burst = ClockSyncBurst(exchangesPerBurst = 8)
         for (index in 0 until 7) {
-            assertNull(burst.record(index.toLong(), 1000), "exchange $index")
+            assertNull(burst.record(index.toLong(), 1000, index.toLong()), "exchange $index")
         }
         assertEquals(7, burst.count)
     }
@@ -26,24 +26,35 @@ class ClockSyncBurstTest {
     fun `returns the measurement with the lowest error`() {
         val burst = ClockSyncBurst(exchangesPerBurst = 8)
         val errors = listOf(1000L, 500L, 900L, 300L, 800L, 700L, 600L, 200L)
-        var result: Long? = null
+        var result: ClockSyncBurst.Sample? = null
         for ((index, error) in errors.withIndex()) {
-            result = burst.record(index.toLong() * 10, error)
+            result = burst.record(index.toLong() * 10, error, index.toLong())
         }
         // The eighth exchange has the lowest error, so its measurement wins.
-        assertEquals(70L, result)
+        assertEquals(70L, result?.measurement)
+        assertEquals(200L, result?.maxError)
         assertEquals(0, burst.count)
     }
 
     @Test
     fun `keeps the lowest error from an earlier exchange`() {
         val burst = ClockSyncBurst(exchangesPerBurst = 4)
-        var result: Long? = null
-        result = burst.record(11L, 100)
-        result = burst.record(22L, 900)
-        result = burst.record(33L, 800)
-        result = burst.record(44L, 700)
-        assertEquals(11L, result)
+        var result: ClockSyncBurst.Sample? = null
+        result = burst.record(11L, 100, 1L)
+        result = burst.record(22L, 900, 2L)
+        result = burst.record(33L, 800, 3L)
+        result = burst.record(44L, 700, 4L)
+        assertEquals(11L, result?.measurement)
+        assertEquals(100L, result?.maxError)
+    }
+
+    @Test
+    fun `keeps the time of the sample it keeps`() {
+        val burst = ClockSyncBurst(exchangesPerBurst = 2)
+        burst.record(1L, 500, 100L)
+        val result = burst.record(2L, 100, 200L)
+        assertEquals(2L, result?.measurement)
+        assertEquals(200L, result?.at)
     }
 
     @Test
@@ -62,15 +73,15 @@ class ClockSyncBurstTest {
     @Test
     fun `starts the next burst with a clean slate`() {
         val burst = ClockSyncBurst(exchangesPerBurst = 4)
-        burst.record(1L, 100)
-        burst.record(2L, 100)
+        burst.record(1L, 100, 1L)
+        burst.record(2L, 100, 2L)
         assertEquals(2, burst.count)
 
         burst.startBurst(0)
         assertEquals(0, burst.count)
         // The first exchange of the new burst is not mistaken for the end of
         // the previous one.
-        assertNull(burst.record(3L, 100))
+        assertNull(burst.record(3L, 100, 3L))
     }
 
     @Test

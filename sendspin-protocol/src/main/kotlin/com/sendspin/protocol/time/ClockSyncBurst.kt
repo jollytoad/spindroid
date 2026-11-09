@@ -9,63 +9,76 @@ package com.sendspin.protocol.time
  * burst with the smallest error, because that is the one most likely to be
  * free of network delay.
  *
- * Between bursts the client waits, so the two clocks are sampled over a
- * longer interval without the exchanges interfering with each other.
+ * The class also paces the bursts. Consecutive bursts must start no more
+ * than ten seconds apart, so the caller asks whether a burst may start and
+ * then starts one.
  */
 public class ClockSyncBurst(
     /** The number of exchanges in a burst. */
-    private val exchangesPerBurst: Int = DEFAULT_EXCHANGES_PER_BURST,
+    public val exchangesPerBurst: Int = DEFAULT_EXCHANGES_PER_BURST,
     /** The gap between bursts, in microseconds. */
     private val burstIntervalMicros: Long = DEFAULT_BURST_INTERVAL_MICROS,
 ) {
+    /**
+     * One measurement of the clock, and how wrong it may be.
+     *
+     * @property measurement the observed offset between the two clocks
+     * @property maxError the worst-case error of the measurement
+     * @property at the local time the measurement was taken, in microseconds
+     */
+    public data class Sample(
+        val measurement: Long,
+        val maxError: Long,
+        val at: Long,
+    )
+
     private var measurements = 0
-    private var bestMeasurement: Long = 0
-    private var bestMaxError: Long = 0
+    private var best: Sample? = null
     private var nextBurstAllowedAt: Long = 0
 
-    /** The number of exchanges in the current burst. */
+    /** The number of exchanges of the burst that has not finished. */
     public val count: Int get() = measurements
 
     /**
-     * Records one exchange and reports whether the burst is complete.
+     * Starts a burst.
      *
-     * The caller feeds the filter with the measurement that this returns.
-     *
-     * @param measurement the observed offset
-     * @param maxError the worst-case error of the measurement
-     * @return the measurement to feed the filter, or null while the burst is
-     *   still running
+     * The next burst may start after the interval has passed.
      */
-    public fun record(measurement: Long, maxError: Long): Long? {
-        if (measurements == 0 || maxError < bestMaxError) {
-            bestMeasurement = measurement
-            bestMaxError = maxError
-        }
-        measurements++
-        if (measurements < exchangesPerBurst) return null
-        val best = bestMeasurement
+    public fun startBurst(nowMicros: Long) {
         measurements = 0
-        bestMaxError = 0
-        nextBurstAllowedAt = Long.MAX_VALUE
-        return best
+        best = null
+        nextBurstAllowedAt = nowMicros + burstIntervalMicros
     }
 
     /**
-     * Reports whether the client may start a new burst.
+     * Reports whether a burst may start.
      *
      * @param nowMicros the current local time
      */
     public fun canStartBurst(nowMicros: Long): Boolean = nowMicros >= nextBurstAllowedAt
 
     /**
-     * Records that a burst has started, so the next one waits.
+     * Records one exchange and reports whether the burst has finished.
      *
-     * @param nowMicros the current local time
+     * The caller feeds the filter with the sample this returns.
+     *
+     * @param measurement the observed offset
+     * @param maxError the worst-case error of the measurement
+     * @param at the local time the measurement was taken
+     * @return the sample to feed the filter, or null while the burst is
+     *   still running
      */
-    public fun startBurst(nowMicros: Long) {
+    public fun record(measurement: Long, maxError: Long, at: Long): Sample? {
+        val current = best
+        if (current == null || maxError < current.maxError) {
+            best = Sample(measurement, maxError, at)
+        }
+        measurements++
+        if (measurements < exchangesPerBurst) return null
+        val sample = best ?: return null
         measurements = 0
-        bestMaxError = 0
-        nextBurstAllowedAt = nowMicros + burstIntervalMicros
+        best = null
+        return sample
     }
 
     public companion object {

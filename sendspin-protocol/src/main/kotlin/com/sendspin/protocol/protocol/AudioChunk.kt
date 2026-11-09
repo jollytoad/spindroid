@@ -18,8 +18,24 @@ public object AudioChunk {
      * @param audio the encoded audio frame
      */
     public fun source(timestampMicros: Long, audio: ByteArray): ByteArray {
-        val out = ByteBuffer.allocate(1 + 8 + audio.size)
+        val out = ByteBuffer.allocate(1 + sourceBody(timestampMicros, audio).size)
         out.put(MessageId.SOURCE_AUDIO.toByte())
+        out.put(sourceBody(timestampMicros, audio))
+        return out.array()
+    }
+
+    /**
+     * Builds the body of a source audio message, without the type byte.
+     *
+     * The framing layer takes the body on its own, because it adds the type
+     * byte itself.
+     *
+     * @param timestampMicros the server time of the first sample, in
+     *   microseconds
+     * @param audio the encoded audio frame
+     */
+    public fun sourceBody(timestampMicros: Long, audio: ByteArray): ByteArray {
+        val out = ByteBuffer.allocate(8 + audio.size)
         out.putLong(timestampMicros)
         out.put(audio)
         return out.array()

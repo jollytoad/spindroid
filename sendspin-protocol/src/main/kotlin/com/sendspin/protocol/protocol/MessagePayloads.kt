@@ -65,8 +65,45 @@ public data class ClientHelloPayload(
     @field:Json(name = "device_info") val deviceInfo: DeviceInfo? = null,
     @field:Json(name = "supported_roles") val supportedRoles: List<String>,
     @field:Json(name = "player@v1_support") val playerSupport: PlayerSupport? = null,
-    @field:Json(name = "supported_pair_methods") val supportedPairMethods: Map<String, Any?> = emptyMap(),
+    @field:Json(name = "source@v1_support") val sourceSupport: ClientSourceSupport? = null,
+    @field:Json(name = "supported_pair_methods")
+    val supportedPairMethods: Map<String, PairMethodDescriptor> = emptyMap(),
     @field:Json(name = "unpaired_access") val unpairedAccess: UnpairedAccess,
+)
+
+/**
+ * The `source@v1_support` object of `client/hello`.
+ *
+ * The client sends this object when it lists the `source@v1` role. It tells
+ * the server which optional features the client has. The server sends a
+ * different object under the same key, one that lists the codecs it takes.
+ */
+@JsonClass(generateAdapter = true)
+public data class ClientSourceSupport(
+    val features: SourceFeatures? = null,
+)
+
+/** The optional features of the `source@v1` role. */
+@JsonClass(generateAdapter = true)
+public data class SourceFeatures(
+    /** The client reports whether the input carries a signal. */
+    @field:Json(name = "line_sense") val lineSense: Boolean? = null,
+)
+
+/**
+ * The descriptor of one pairing method.
+ *
+ * The descriptor tells the server how the operator is expected to reach the
+ * secret, so the server can offer the right way to enter it.
+ */
+@JsonClass(generateAdapter = true)
+public data class PairMethodDescriptor(
+    /** Where the operator finds the secret. */
+    val locations: List<String>? = null,
+    /** The channels the client emits a pairing code on. */
+    @field:Json(name = "out_channels") val outChannels: List<String>? = null,
+    /** The formats the client offers for a pairing code. */
+    val formats: List<String>? = null,
 )
 
 /** The `device_info` object of `client/hello`. */
@@ -152,8 +189,14 @@ public data class PlayerState(
 /** The `source` object of `client/state`. */
 @JsonClass(generateAdapter = true)
 public data class SourceState(
-    /** `present` or `absent`. */
-    val signal: String,
+    /**
+     * `present` or `absent`.
+     *
+     * The field is optional. It is only sent when the client advertises the
+     * `line_sense` feature, because a client without it does not report
+     * whether the input carries a signal.
+     */
+    val signal: String? = null,
 )
 
 /** The payload of `server/state`. */
