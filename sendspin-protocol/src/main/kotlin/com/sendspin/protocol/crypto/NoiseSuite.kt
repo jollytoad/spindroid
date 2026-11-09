@@ -59,4 +59,15 @@ public enum class NoiseSuite(
         }
         return nonce
     }
+
+    public companion object {
+        /**
+         * Finds the suite with the given wire name.
+         *
+         * @param name the name as it appears in `client/init`
+         * @return the suite, or null when the name is not one of the two
+         */
+        public fun fromWireName(name: String): NoiseSuite? =
+            entries.firstOrNull { it.protocolName == name }
+    }
 }

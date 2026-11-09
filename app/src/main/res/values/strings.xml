@@ -1,4 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SendSpin</string>
+
+    <!-- The main screen. -->
+    <string name="title_server">Music Assistant</string>
+    <string name="label_server_address">Server address</string>
+    <string name="hint_server_address">192.168.1.10</string>
+    <string name="label_capture_source">Audio source</string>
+    <string name="label_direction">Connection</string>
+    <string name="direction_dial_out">Dial out</string>
+    <string name="direction_accept_incoming">Accept incoming</string>
+    <string name="capture_system_audio">System audio</string>
+    <string name="capture_microphone">Microphone</string>
+    <string name="action_connect">Connect</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="action_copy_token">Copy token</string>
+    <string name="action_copy_done">Token copied</string>
+
+    <!-- The pairing section. -->
+    <string name="title_pairing">Pairing</string>
+    <string name="pairing_explanation">Paste this token into Music Assistant to pair the phone. The token never changes, so the same one works for every server.</string>
+    <string name="label_pairing_token">Pairing token</string>
+    <string name="label_qr_code">Scan this code</string>
+
+    <!-- The status panel. -->
+    <string name="title_status">Status</string>
+    <string name="label_connection">Connection</string>
+    <string name="label_server_name">Server</string>
+    <string name="label_paired">Paired</string>
+    <string name="label_clock_error">Clock error</string>
+    <string name="label_stream">Stream</string>
+    <string name="value_not_paired">Not paired</string>
+    <string name="value_no_server">No server</string>
+    <string name="value_yes">Yes</string>
+    <string name="value_no">No</string>
+
+    <!-- The connection states. -->
+    <string name="state_idle">Idle</string>
+    <string name="state_connecting">Connecting</string>
+    <string name="state_handshaking">Handshaking</string>
+    <string name="state_hello">Saying hello</string>
+    <string name="state_syncing">Syncing the clock</string>
+    <string name="state_ready">Ready</string>
+    <string name="state_streaming">Streaming</string>
+    <string name="state_closed">Disconnected</string>
+
+    <!-- The stream states. -->
+    <string name="stream_stopped">Stopped</string>
+    <string name="stream_waiting">Waiting for the server</string>
+    <string name="stream_running">Sending audio</string>
+
+    <!-- The foreground service. -->
+    <string name="notification_channel">Audio capture</string>
+    <string name="notification_connecting">Connecting to the server</string>
+    <string name="notification_waiting">Waiting for the server</string>
+    <string name="notification_streaming">Sending audio</string>
+    <string name="notification_disconnected">Disconnected</string>
+    <string name="notification_idle">SendSpin is ready</string>
+    <string name="notification_text">No server yet</string>
+    <string name="notification_stop">Stop</string>
+
+    <!-- The permission messages. -->
+    <string name="error_microphone_permission">The app needs the microphone to capture it.</string>
+    <string name="error_notifications_permission">Without the notification permission, the app cannot run in the background.</string>
+    <string name="error_projection_denied">The app needs the screen capture to hear the system audio.</string>
 </resources>

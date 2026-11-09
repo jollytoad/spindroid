@@ -3,6 +3,9 @@
 
 plugins {
     id("com.android.application")
+    // The Compose compiler. The version comes from the buildscript classpath,
+    // because it has to match the Kotlin that AGP 9.5.0 brings.
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -48,8 +51,26 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
+
+    buildFeatures {
+        compose = true
+    }
 }
 
 dependencies {
     implementation(project(":sendspin-protocol"))
+
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.security.crypto)
+    implementation(libs.okhttp)
+    implementation(libs.java.websocket)
+    implementation(libs.zxing.core)
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui.tooling)
 }

@@ -16,5 +16,9 @@ buildscript {
         classpath("com.android.tools.build:gradle:9.5.0")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.21")
         classpath("com.google.devtools.ksp:symbol-processing-gradle-plugin:2.3.13")
+        // The Compose compiler has to match the Kotlin version that compiles
+        // the code. The app module uses the Kotlin that AGP 9.5.0 brings,
+        // which is 2.2.10.
+        classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.2.10")
     }
 }

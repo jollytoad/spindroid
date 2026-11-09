@@ -1,9 +1,15 @@
 [versions]
 moshi = "1.15.2"
-okhttp = "5.5.1"
+okhttp = "5.4.0"
 javaWebSocket = "1.6.0"
 junit = "5.14.4"
 coroutines = "1.10.2"
+androidxCore = "1.13.1"
+androidxActivity = "1.9.3"
+androidxLifecycle = "2.8.7"
+androidxSecurity = "1.1.0-alpha06"
+composeBom = "2024.10.01"
+zxing = "3.5.3"
 
 [libraries]
 moshi = { module = "com.squareup.moshi:moshi", version.ref = "moshi" }
@@ -15,3 +21,13 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
+androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "androidxLifecycle" }
+androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "androidxSecurity" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
