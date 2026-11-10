@@ -28,6 +28,12 @@ The spec allows only one direction at a time. The app must stop advertising
 when it dials out, and stop dialing out when it advertises. The app enforces
 this rule in one place.
 
+Phase 1 ships one direction only, and one capture source only. The phone
+listens on the local network, the server dials in, and the phone captures the
+system audio. The dial-out path and the microphone capture were dropped, and
+the screen has no picker for either. The phone test never proved them. They
+may come back in a later phase.
+
 ## Decisions taken
 
 The full list is in [decisions.md](decisions.md). The short version:
@@ -37,14 +43,13 @@ The full list is in [decisions.md](decisions.md). The short version:
 | Architecture | Both source mode and server mode in one app | The owner asked for both. |
 | The modes | Exclusive. The app runs one at a time. | Relay is not a goal. |
 | Target server | Music Assistant | It shows source clients under Live Inputs. |
-| Capture | Both system audio and microphone, user selectable | Both share one pipeline. |
-| Connection direction | Both, selectable per mode | The owner asked for both. |
+| Capture | The system audio only | The microphone path was dropped in phase 1. The phone test never proved it. |
+| Connection direction | Accept incoming only | The dial-out path was dropped in phase 1. The phone test never proved it. |
 | Pairing | Pairing token first, dynamic code later | The token flow needs no extra crypto code. |
 | Minimum version | Android 13, API 33 | The owner decided this. It removes the need for a crypto library. |
 | Noise library | Hand-rolled `KKpsk2` on the platform JCA | The spec requires the PSK to be chosen after reading Noise message 1. Stock libraries bind the PSK at construction. |
 | Cipher suite | Both suites. AES-GCM by default. | The client picks the suite, so no negotiation is needed. |
 | Clock filter | Port of the C++ reference in `Sendspin/time-filter` | The spec names it as the reference implementation. |
-| WebSocket, dial out | OkHttp | Mature and Android friendly. |
 | WebSocket, accept incoming | Java-WebSocket | Plain Java library. It runs on Android without a server framework. |
 | JSON | Moshi with KSP codegen | No reflection at runtime. |
 | Audio codec | PCM only | Every server accepts PCM. FLAC is not planned yet. |

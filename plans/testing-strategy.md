@@ -95,7 +95,7 @@ Use a physical device. The emulator supports playback capture poorly.
 
 | Android version | What to check |
 | --- | --- |
-| API 33 | The minimum version. Playback capture and the microphone path. |
+| API 33 | The minimum version. Playback capture. |
 | API 34 | The MediaProjection rules changed. The foreground service must start first. |
 | API 35 | The foreground service rules changed again. |
 | API 36 | The `ACCESS_LOCAL_NETWORK` permission and the local network restrictions. |
@@ -107,8 +107,7 @@ Checks on each version:
 3. The notification appears and the stop button works.
 4. The app keeps streaming with the screen off.
 5. The app keeps streaming with the battery saver on.
-6. The microphone path produces audio on every version.
-7. The app connects with both cipher suites, whatever the hardware benchmark
+6. The app connects with both cipher suites, whatever the hardware benchmark
    picks.
 
 ## Cipher suite tests

@@ -15,18 +15,23 @@ The code is complete. Every task below is done, and the test suite has 187
 tests. The tests run on the JVM without an emulator, and they cover the
 session, the pairing, the framing, the resampling, and the admission rules.
 
-The app is installed on a real phone, and the pairing works there. The rest
-of the device behaviour is not proven yet. The capture, the foreground
-service, and the reconnect after a screen-off were not exercised on hardware.
-The exit criteria that need a device are therefore open:
+The app has one path only. The phone captures the system audio, waits for
+the server to dial it, and sends the audio to that server. The microphone
+capture and the dial-out path were dropped, because the phone test never
+proved them. The screen has no picker for either.
+
+The app is installed on a real phone. The server pairs with it, the clock
+settles below a millisecond, the capture follows the sound that the phone
+plays, and the audio comes out of the browser. The sound is distorted, and
+that is the next problem.
 
 | Exit criterion | State |
 | --- | --- |
 | The app builds and installs on a physical device running Android 13 or later | Done. The app builds, installs, and runs on the test phone. |
 | Music Assistant shows the phone under Live Inputs after the user pastes the pairing token | Done. Music Assistant paired with the phone through `pairing_psk` on the test phone. |
-| The user can select the phone as an input in Music Assistant, and the audio plays on a speaker | Open. The client now answers the start command at once. The capture status panel shows whether the phone captures sound. It needs a retest on the phone. |
-| The clock error settles below 1 ms in the status panel | Proven against the test server. The filter settles at a few tens of microseconds over a local socket. |
-| The app survives a screen-off and a network drop. It reconnects on its own. | Open. The reconnect is written, but not run on a device. |
+| The user can select the phone as an input in Music Assistant, and the audio plays on a speaker | Open. The audio comes out of the browser, but it is distorted. |
+| The clock error settles below 1 ms in the status panel | Done on the phone. The panel showed 723 to 996 µs. The filter settles at a few tens of microseconds over a local socket. |
+| The app survives a screen-off and a network drop. It reconnects on its own. | Open. The phone keeps the port open and the advertisement up, so the server can dial in again. The server has to make the new connection, and that is not proven on the phone. |
 | The app uses AES-GCM by default and falls back to ChaCha-Poly on a device without hardware AES | Written. The benchmark picks the suite, and the client offers the other one when the server refuses. |
 
 | Deliverable | Where |
@@ -35,7 +40,7 @@ The exit criteria that need a device are therefore open:
 | The pairing flow and the PSK store | `.../psk/`, `.../pairing/` |
 | The capture, the resampler, and the chunker | `app/.../capture/`, `sendspin-protocol/.../codec/` |
 | The foreground service | `app/.../service/SendSpinService.kt` |
-| The dial-out and the accept-incoming paths | `app/.../net/`, `app/.../discovery/` |
+| The incoming path and the advertisement | `app/.../net/`, `app/.../discovery/` |
 | The screen | `app/.../ui/MainScreen.kt` |
 | A second implementation of the server side | `tools/test_server.py` |
 
@@ -92,6 +97,19 @@ Several things were harder than they looked. Most are now covered by a test.
    example because the phone plays nothing, never sent the answer. The
    client now opens the stream at once, and the audio follows.
 
+10. **One path is enough.** The app had a microphone capture and a dial-out
+    path next to the ones that work. Neither was ever proved on a phone,
+    and both added a picker to the screen. They were dropped. The phone now
+    captures the system audio and waits for the server to dial it, and the
+    screen has one button. The dial-out path also needed a reconnect policy
+    and a second transport, so it took the most code of the three.
+
+11. **A WebSocket library can pass a null socket.** The library calls the
+    error handler with no socket when the bind fails. The Kotlin override
+    declared the parameter as non-null, so the branch that reports a failed
+    bind never ran. The parameter is nullable now, and the failure reaches
+    the status panel.
+
 ### The second implementation
 
 `tools/test_server.py` is a server that was written from the specification
@@ -107,7 +125,7 @@ package for it.
 ## Deliverables
 
 1. A client session that offers the `source@v1` role.
-2. A capture screen that offers the system audio mode and the microphone mode.
+2. A capture screen that starts the system audio capture.
 3. A pairing screen that shows the pairing token.
 4. A foreground service that keeps the app alive while it streams.
 5. A status screen that shows the connection, the pairing state, and the
@@ -119,9 +137,9 @@ package for it.
 
 1. Write the session class. It owns the WebSocket, the Noise channel, the
    clock filter, and the source state.
-2. Write the dial-out path:
-   - Open the WebSocket to `ws://host:8927/sendspin`.
-   - Reconnect with exponential backoff.
+2. Write the session so that it does not know how the connection is made.
+   The application supplies the transport, so the same session runs over
+   any socket.
 3. Write the handshake path:
    - Send `client/init` with the `client_id`, the version `1`, and the suite
      `25519_ChaChaPoly_SHA256`.
@@ -178,7 +196,8 @@ package for it.
 
 1. Write a capture interface. It produces PCM blocks with a capture timestamp.
 2. Write the system audio capture:
-   - Request `RECORD_AUDIO` at runtime.
+   - Request `RECORD_AUDIO` at runtime. Android asks for it for a record
+     that reads what the system is playing.
    - Show the MediaProjection consent prompt.
    - Start the foreground service of type `mediaProjection` before calling
      `getMediaProjection()`.
@@ -186,25 +205,23 @@ package for it.
      `USAGE_MEDIA`, `USAGE_GAME`, and `USAGE_UNKNOWN`.
    - Build the `AudioRecord` with `setAudioPlaybackCaptureConfig`.
    - Register a `MediaProjection.Callback` and stop the capture on `onStop`.
-3. Write the microphone capture:
-   - Request `RECORD_AUDIO` at runtime.
-   - Use the foreground service of type `microphone`.
-   - Use an `AudioRecord` with a voice source that avoids the AGC, so the
-     signal stays flat.
-4. Write the resampler. The capture rate and the announced rate may differ.
+   - Read into a direct buffer. A buffer in the heap makes every read fail
+     with the code -2.
+   - Stamp the block with the time of its first sample, not the time of the
+     read.
+3. Write the resampler. The capture rate and the announced rate may differ.
    The server resamples, so the app must send one rate consistently. Pick the
    capture rate and announce it. The plan uses 48 kHz, 16-bit, stereo, which
    costs about 192 kB/s.
-5. Write the backlog guard. When the network stalls, drop audio older than a
+4. Write the backlog guard. When the network stalls, drop audio older than a
    small bound and resume from live capture. Use the same bound as the
    reference implementation: 500 ms.
 
 ### 4. The foreground service
 
-1. Declare the service with the types `mediaProjection` and `microphone`.
+1. Declare the service with the type `mediaProjection`.
 2. Declare the permissions `FOREGROUND_SERVICE`,
-   `FOREGROUND_SERVICE_MEDIA_PROJECTION`, `FOREGROUND_SERVICE_MICROPHONE`, and
-   `POST_NOTIFICATIONS`.
+   `FOREGROUND_SERVICE_MEDIA_PROJECTION`, and `POST_NOTIFICATIONS`.
 3. Ask for `POST_NOTIFICATIONS` at runtime. Android 13 made it a runtime
    permission. The service must work without it, but the notification stays
    hidden.
@@ -217,8 +234,9 @@ package for it.
 The interface stays minimal. It shows only what the user needs to pair, to
 capture, and to see the state.
 
-1. Write the main screen. It shows the Music Assistant address, the connect
-   button, the capture source picker, and the status line.
+1. Write the main screen. It shows the connect button and the status line.
+   There is no picker, because the app has one capture source and one
+   connection direction.
 2. Write the pairing section. It shows the token, a copy button, and a QR
    code.
 3. Write the status panel. It shows:
@@ -226,23 +244,23 @@ capture, and to see the state.
    - The pairing state and the paired server names.
    - The clock error in microseconds.
    - The stream state and whether the server asked for audio.
-4. Save the settings. Store the server address, the capture source, and the
-   cipher suite.
+4. Save the settings. Store the cipher suite.
 
-### 6. Discovery, part one
+### 6. Discovery and the incoming connection
 
-1. Register `_sendspin._tcp.local.` with NsdManager when the user chooses
-   "accept incoming".
-2. Stop the registration when the user chooses "dial out". The spec forbids
-   doing both at once.
-3. Listen for incoming WebSocket connections on the local port and run a
+1. Register `_sendspin._tcp.local.` with NsdManager while the capture runs.
+2. Listen for incoming WebSocket connections on the local port and run a
    source session for each. Apply the priority rules from the spec: one
    admitted connection at a time, ranked by activity.
+3. Start the advertisement only after the socket listens. A server that
+   reads the advertisement and dials at once would otherwise find a closed
+   port.
 
 ### 7. Music Assistant specifics
 
-1. Dial `ws://<ma-host>:8927/sendspin`. The port is the SendSpin port, not
-   the Music Assistant web port.
+1. Listen on the port 8928 and wait for the server to dial
+   `ws://<the-phone>:8928/sendspin`. The server finds the phone over the
+   advertisement, so both must be on the same network.
 2. Write the pairing instructions into the app. The user pastes the token into
    the Music Assistant pairing screen.
 3. Tell the user where to find the input. The phone appears under **Live
@@ -260,7 +278,8 @@ capture, and to see the state.
 3. The user can select the phone as an input in Music Assistant, and the audio
    plays on a speaker.
 4. The clock error settles below 1 ms in the status panel.
-5. The app survives a screen-off and a network drop. It reconnects on its own.
+5. The app survives a screen-off and a network drop. The server can dial in
+   again without the user doing anything.
 6. The app uses AES-GCM by default and falls back to ChaCha-Poly on a device
    without hardware AES.
 
@@ -268,10 +287,11 @@ capture, and to see the state.
 
 | Risk | Response |
 | --- | --- |
-| The system audio capture returns silence on the test device | Test this in the first week. Many Android 14 devices block it. Keep the microphone mode as a fallback. |
+| The system audio capture returns silence on the test device | Test this in the first week. Many Android 14 devices block it. The status panel shows the capture level, so a silent capture is easy to tell apart from a broken one. |
 | DRM apps produce silence | Document the limit in the app. Show the capture level in the status panel. |
 | The MediaProjection consent flow fails on Android 14 and higher | Start the foreground service before `getMediaProjection()`. Test on API 34. |
 | The clock never converges | Check the burst strategy and the burst interval. The spec wants bursts no more than 10 seconds apart. |
 | The app is killed in the background | Use a foreground service. Test with the battery saver on. |
 | The hardware AES benchmark picks the wrong suite | The two suites both work. A wrong pick costs performance, not correctness. |
 | The notification stays hidden | Android 13 made `POST_NOTIFICATIONS` a runtime permission. Ask for it. The service works either way. |
+| The server does not dial in again after a drop | The phone keeps the port open and the advertisement up. If the server does not retry, the user has to start the playback again in Music Assistant. |

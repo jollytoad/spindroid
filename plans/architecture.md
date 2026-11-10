@@ -14,7 +14,7 @@ sendspin-sender/
 │   ├── time/                   Kalman clock filter
 │   └── codec/                  PCM framing
 ├── app/                        Android application
-│   ├── capture/                MediaProjection capture, microphone capture
+│   ├── capture/                MediaProjection capture
 │   ├── service/                Foreground service
 │   ├── discovery/              mDNS registration with NsdManager
 │   ├── storage/                EncryptedSharedPreferences keys and settings
@@ -339,19 +339,10 @@ Two limits apply.
 2. Many Android 14 devices block third-party playback capture and return
    silence.
 
-### Microphone
-
-| Requirement | Detail |
-| --- | --- |
-| Permissions | `RECORD_AUDIO`, granted at runtime |
-| Foreground service | Type `microphone` |
-
-The microphone path works on every Android version.
-
 ### Local network access
 
 Android 16, API 36, adds the `ACCESS_LOCAL_NETWORK` permission. The app needs
-it to reach a server on the local network and to accept incoming connections.
+it to accept incoming connections.
 
 ### The foreground service notification
 
