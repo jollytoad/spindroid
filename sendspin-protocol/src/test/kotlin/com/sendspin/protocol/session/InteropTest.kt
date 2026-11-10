@@ -177,9 +177,9 @@ class InteropTest {
             assertNull(run.closedReason, "The session closed early")
             assertTrue(run.state.clockConverged, "The clock did not converge")
             assertTrue(run.state.available, "The session did not report itself available")
-            assertEquals(SessionPhase.READY, run.readyState.phase)
+            assertEquals(SessionPhase.STREAMING, run.readyState.phase)
             assertTrue(
-                run.readyState.serverRequestedAudio,
+                run.readyState.streaming,
                 "The server did not ask for the audio",
             )
             assertTrue(run.state.streaming, "The stream did not open")
@@ -294,7 +294,7 @@ class InteropTest {
             while (System.currentTimeMillis() < deadline) {
                 drain(transport, session)
                 session.pollClock()
-                if (session.state.available && session.state.serverRequestedAudio) break
+                if (session.state.available && session.state.streaming) break
                 Thread.sleep(10)
             }
 

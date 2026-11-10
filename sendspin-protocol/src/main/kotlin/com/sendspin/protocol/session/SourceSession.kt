@@ -123,8 +123,12 @@ public class SourceSession(
     /** A burst of exchanges is running. */
     private var burstRunning = false
 
-    /** The server asked for audio, and the stream opens with the next block. */
-    private var startAuthorized = false
+    /**
+     * The server asked for audio before the clock settled.
+     *
+     * The request is kept, and the stream opens when the clock converges.
+     */
+    private var startRequested = false
 
     /** The stream is open, and audio chunks are on their way. */
     private var streaming = false
@@ -215,8 +219,6 @@ public class SourceSession(
      */
     public fun onCapturedAudio(pcm: ByteArray, captureTimestampMicros: Long) {
         synchronized(lock) {
-            if (!startAuthorized) return
-            if (!streaming) openStream()
             if (!streaming) return
             val now = clock.nowMicros()
             // The backlog guard: audio that waited too long is stale, and
@@ -640,6 +642,11 @@ public class SourceSession(
         if (converged && !currentState.available) {
             sendState()
         }
+        if (converged && startRequested && isSourceActive()) {
+            // The server asked before the clock settled. The stream can open
+            // now, so its first chunk carries a correct timestamp.
+            openStream()
+        }
     }
 
     /** Handles the `server/command` message. */
@@ -650,18 +657,22 @@ public class SourceSession(
         val source = command.source ?: return
         when (source.command) {
             "start" -> {
-                // A start authorizes one opening. A second start does not
-                // restart the stream.
-                if (startAuthorized || streaming) return
+                // A start opens one stream. A second start does not restart it.
+                if (streaming || startRequested) return
                 if (!isSourceActive()) return
-                if (!currentState.available) return
-                startAuthorized = true
-                currentState = currentState.copy(serverRequestedAudio = true)
-                publish()
+                if (!currentState.available) {
+                    // The start may arrive before the clock settles. Keep the
+                    // request, and open the stream when the clock converges.
+                    startRequested = true
+                    currentState = currentState.copy(serverRequestedAudio = true)
+                    publish()
+                    return
+                }
+                openStream()
             }
 
             "stop" -> {
-                startAuthorized = false
+                startRequested = false
                 endStream()
             }
 
@@ -676,6 +687,7 @@ public class SourceSession(
      * `pcm`, and the app only produces `pcm`.
      */
     private fun openStream() {
+        if (streaming) return
         if (serverCodecs.isNotEmpty() && !serverCodecs.contains(configuration.format.codec)) {
             fail("The server does not take ${configuration.format.codec}")
             return
@@ -691,7 +703,7 @@ public class SourceSession(
                 ),
             ),
         )
-        startAuthorized = false
+        startRequested = false
         streaming = true
         currentState = currentState.copy(
             streaming = true,
@@ -704,7 +716,7 @@ public class SourceSession(
 
     /** Ends the stream, and tells the server. */
     private fun endStream() {
-        startAuthorized = false
+        startRequested = false
         if (!streaming) {
             if (currentState.serverRequestedAudio) {
                 currentState = currentState.copy(serverRequestedAudio = false)
@@ -786,6 +798,10 @@ public class SourceSession(
         channel = noise.split()
         matched = selection.category
         paired = matched == PskCategory.LONG_TERM
+        // The server starts its count again after every re-handshake, so the
+        // client has to do the same. A pairing that follows this handshake
+        // then carries index 1, not the index of an earlier attempt.
+        pairingIndex = 0
         reassembler = FragmentReassembler()
         currentState = currentState.copy(paired = paired)
         publish()

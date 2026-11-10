@@ -530,14 +530,96 @@ class SourceSessionTest {
                 ServerCommandPayload(source = SourceCommand(command = "start")),
             ),
         )
-        assertTrue(session.state.serverRequestedAudio)
 
-        // The first captured block opens the stream.
+        // The stream opens at once. The server waits only a few seconds for
+        // the answer, so the client must not wait for the first audio.
+        assertTrue(session.state.streaming)
+        assertEquals(SessionPhase.STREAMING, session.state.phase)
+        assertFalse(session.state.serverRequestedAudio)
+
+        // The captured audio follows.
         val before = transport.binaries.size
         session.onCapturedAudio(byteArrayOf(1, 2, 3, 4), clock.now)
         assertTrue(transport.binaries.size > before)
+    }
+
+    @Test
+    fun `a start command opens the stream without any audio`() {
+        val (session, transport, server) = handshake()
+        sayHello(session, server)
+        activateSource(session, server)
+        convergeClock(session, server)
+
+        val before = transport.binaries.size
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_COMMAND,
+                ServerCommandPayload(source = SourceCommand(command = "start")),
+            ),
+        )
+
+        // The client answers with the format of the stream, even when no
+        // audio has arrived yet.
+        assertTrue(transport.binaries.size > before)
+        val start = codec.decode<ClientStreamStartPayload>(
+            MessageType.CLIENT_STREAM_START,
+            server.nextJson(MessageType.CLIENT_STREAM_START),
+        )
+        assertEquals("pcm", start.source?.codec)
+    }
+
+    @Test
+    fun `a start command before the clock settles opens the stream later`() {
+        val (session, transport, server) = handshake()
+        sayHello(session, server)
+        activateSource(session, server)
+
+        // The server asks before the clock is in sync. The request is kept.
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_COMMAND,
+                ServerCommandPayload(source = SourceCommand(command = "start")),
+            ),
+        )
+        assertFalse(session.state.streaming)
+        assertTrue(session.state.serverRequestedAudio)
+
+        convergeClock(session, server)
+
         assertTrue(session.state.streaming)
-        assertEquals(SessionPhase.STREAMING, session.state.phase)
+        assertFalse(session.state.serverRequestedAudio)
+        val start = codec.decode<ClientStreamStartPayload>(
+            MessageType.CLIENT_STREAM_START,
+            server.nextJson(MessageType.CLIENT_STREAM_START),
+        )
+        assertEquals("pcm", start.source?.codec)
+    }
+
+    @Test
+    fun `a stop command drops a start that waits for the clock`() {
+        val (session, transport, server) = handshake()
+        sayHello(session, server)
+        activateSource(session, server)
+
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_COMMAND,
+                ServerCommandPayload(source = SourceCommand(command = "start")),
+            ),
+        )
+        assertTrue(session.state.serverRequestedAudio)
+
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_COMMAND,
+                ServerCommandPayload(source = SourceCommand(command = "stop")),
+            ),
+        )
+        assertFalse(session.state.serverRequestedAudio)
+
+        // The clock settles later, and the stream stays closed.
+        convergeClock(session, server)
+        assertFalse(session.state.streaming)
     }
 
     @Test
@@ -615,7 +697,6 @@ class SourceSessionTest {
                 ServerCommandPayload(source = SourceCommand(command = "start")),
             ),
         )
-        session.onCapturedAudio(byteArrayOf(1, 2, 3, 4), clock.now)
 
         val start = codec.decode<ClientStreamStartPayload>(
             MessageType.CLIENT_STREAM_START,
@@ -897,6 +978,62 @@ class SourceSessionTest {
 
         // The session is now on the long-term key, so it counts as paired.
         assertTrue(session.state.paired)
+    }
+
+    @Test
+    fun `a re-handshake resets the pairing index`() {
+        val keys = TestKeyStore()
+        val (session, transport, server) = handshake(
+            keys = keys,
+            namedPskId = SendspinPsk.id(keys.pairingPsk),
+            namedCategory = "pr",
+        )
+        sayHello(session, server)
+
+        // The first attempt carries index 1.
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_ACTIVATE,
+                ServerActivatePayload(
+                    activities = listOf("pairing"),
+                    activeRoles = listOf(),
+                    pairing = PairingParameters(method = "pairing_psk"),
+                ),
+            ),
+        )
+        val first = codec.decode<ClientPairInitPayload>(
+            MessageType.CLIENT_PAIR_INIT,
+            server.nextJson(MessageType.CLIENT_PAIR_INIT),
+        )
+        assertEquals(1, first.pairingIndex)
+        server.nextJson(MessageType.CLIENT_PAIR_FINALIZE)
+        session.onBinaryMessage(
+            server.encryptJson(MessageType.SERVER_PAIR_FINALIZE, ServerPairFinalizePayload()),
+        )
+
+        // The server starts its count again after a re-handshake. A second
+        // attempt therefore carries index 1, not 2.
+        session.onBinaryMessage(
+            server.startRehandshake(SendspinPsk.id(keys.pairingPsk), "pr"),
+        )
+        val answer = server.nextJson(MessageType.NOISE_HANDSHAKE)
+        server.finishRehandshake(answer, keys.pairingPsk)
+
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_ACTIVATE,
+                ServerActivatePayload(
+                    activities = listOf("pairing"),
+                    activeRoles = listOf(),
+                    pairing = PairingParameters(method = "pairing_psk"),
+                ),
+            ),
+        )
+        val second = codec.decode<ClientPairInitPayload>(
+            MessageType.CLIENT_PAIR_INIT,
+            server.nextJson(MessageType.CLIENT_PAIR_INIT),
+        )
+        assertEquals(1, second.pairingIndex)
     }
 
     @Test

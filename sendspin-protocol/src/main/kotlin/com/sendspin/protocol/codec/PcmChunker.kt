@@ -56,17 +56,24 @@ public class PcmChunker(
         val out = mutableListOf<Chunk>()
         if (framesPerChunk <= 0 || channels <= 0) return out
         var offset = 0
+        // The frames that this block already gave to earlier chunks.
+        var framesBefore = 0
         while (offset < samples.size) {
             if (filled == 0) {
-                // The chunk starts with this block, so it carries the time
-                // of the block's first sample.
-                chunkTimestamp = timestampMicros
+                // The chunk starts here, so it carries the time of its own
+                // first sample. A block that holds several chunks gives each
+                // one its own time. If they shared one time, the server would
+                // play them all at the same moment, and the sound would
+                // stutter.
+                chunkTimestamp = timestampMicros +
+                    (framesBefore.toLong() * 1_000_000L) / sampleRate
             }
             val room = buffer.size - filled
             val take = minOf(room, samples.size - offset)
             samples.copyInto(buffer, filled, offset, offset + take)
             filled += take
             offset += take
+            framesBefore += take / channels
             if (filled == buffer.size) {
                 out += Chunk(buffer.copyOf(), chunkTimestamp)
                 filled = 0

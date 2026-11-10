@@ -66,6 +66,20 @@ class PcmChunkerTest {
     }
 
     @Test
+    fun `the chunks of one block carry their own time`() {
+        val chunker = PcmChunker(sampleRate = 48000, channels = 2, chunkMillis = 20)
+        val block = ShortArray(960 * 2 * 3) { it.toShort() }
+        val chunks = chunker.offer(block, 1_000L)
+        assertEquals(3, chunks.size)
+        // Every chunk holds twenty milliseconds, so every chunk starts twenty
+        // milliseconds after the one before. A server that plays the chunks
+        // at their time then hears a smooth sound.
+        assertEquals(1_000L, chunks[0].timestampMicros)
+        assertEquals(21_000L, chunks[1].timestampMicros)
+        assertEquals(41_000L, chunks[2].timestampMicros)
+    }
+
+    @Test
     fun `the samples keep their order`() {
         val chunker = PcmChunker(sampleRate = 48000, channels = 1, chunkMillis = 20)
         val block = ShortArray(960) { (it % 100).toShort() }
