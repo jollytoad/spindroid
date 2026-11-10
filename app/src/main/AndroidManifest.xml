@@ -5,13 +5,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- The capture of the system audio and of the microphone. -->
+    <!-- The capture of the system audio. Android asks for this permission
+         for a record that reads what the system is playing. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- The foreground service that keeps the capture alive. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <!-- The notification that shows the state of the capture. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -44,7 +44,7 @@
         <service
             android:name=".service.SendSpinService"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection|microphone" />
+            android:foregroundServiceType="mediaProjection" />
 
     </application>
 

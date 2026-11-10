@@ -924,8 +924,8 @@ public data class SourceSessionConfiguration(
     /**
      * Whether the client admits a server it has not paired with.
      *
-     * The microphone is a privacy-sensitive input, so the app leaves this
-     * off. The server then has to pair before it may use the audio.
+     * The captured audio is a privacy-sensitive input, so the app leaves
+     * this off. The server then has to pair before it may use the audio.
      */
     public val unpairedAccessEnabled: Boolean = false,
 )

@@ -3,10 +3,10 @@ package com.sendspin.protocol.codec
 /**
  * Converts captured audio into the format the client announces.
  *
- * The device may capture at any rate, and the microphone captures one
- * channel while the system audio captures two. The server resamples and
- * transcodes whatever the client sends, so the client only has to be
- * consistent. It announces one format, and this class produces it.
+ * The device may capture at any rate and with any number of channels. The
+ * server resamples and transcodes whatever the client sends, so the client
+ * only has to be consistent. It announces one format, and this class
+ * produces it.
  *
  * The resampling is a linear interpolation between the neighbouring
  * samples. It is not a high quality filter, but the server resamples the

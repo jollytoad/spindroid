@@ -15,7 +15,6 @@ import com.sendspin.sender.capture.AudioCapture
 import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.session.AndroidSessionClock
 import com.sendspin.sender.session.CapturePipeline
-import com.sendspin.sender.session.SourceClient
 import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
@@ -30,8 +29,8 @@ import java.util.concurrent.TimeUnit
 /**
  * The server that waits for the servers to connect.
  *
- * The client can either dial the server or wait for it to dial the client.
- * This class covers the second case. Every connection gets its own
+ * The phone waits for the server to dial it, and the server finds the phone
+ * over the advertisement on the local network. Every connection gets its own
  * session, and only one connection is admitted at a time.
  */
 class InboundServer(
@@ -119,7 +118,7 @@ class InboundServer(
                 sessions[socket]?.session?.onBinaryMessage(data)
             }
 
-            override fun onError(socket: WebSocket, exception: Exception) {
+            override fun onError(socket: WebSocket?, exception: Exception) {
                 if (socket == null) {
                     // The bind failed, so no server can connect.
                     Log.e(TAG, "The server could not listen on the port $port", exception)
@@ -184,7 +183,7 @@ class InboundServer(
                 }
             },
             configuration = SourceSessionConfiguration(
-                clientName = SourceClient.DEVICE_NAME,
+                clientName = DEVICE_NAME,
                 suite = suite,
                 format = format,
             ),
@@ -264,10 +263,16 @@ class InboundServer(
         }
     }
 
-    private companion object {
-        const val TAG = "SendSpin"
+    companion object {
+        private const val TAG = "SendSpin"
 
         /** How often the admitted session is polled for a clock exchange. */
-        const val POLL_INTERVAL_MILLIS = 100L
+        private const val POLL_INTERVAL_MILLIS = 100L
+
+        /** The name the client shows to the server. */
+        const val DEVICE_NAME = "SendSpin"
+
+        /** The audio format the client announces. */
+        val FORMAT = SourceAudioFormat(codec = "pcm", sampleRate = 48000, channels = 2, bitDepth = 16)
     }
 }

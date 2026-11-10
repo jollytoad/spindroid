@@ -21,10 +21,7 @@ import com.sendspin.protocol.pairing.PairingToken
 import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.service.SendSpinService
 import com.sendspin.sender.session.SessionStateHolder
-import com.sendspin.sender.storage.CaptureSource
-import com.sendspin.sender.storage.ConnectionDirection
 import com.sendspin.sender.storage.EncryptedKeyStore
-import com.sendspin.sender.storage.Settings
 import com.sendspin.sender.ui.MainScreen
 import java.text.DateFormat
 import java.util.Date
@@ -32,26 +29,14 @@ import java.util.Date
 /**
  * The only screen of the app.
  *
- * It shows the server address, the capture source, the pairing token, and
- * the state of the connection.
+ * It shows the button that starts the capture, the pairing token, and the
+ * state of the connection.
  */
 class MainActivity : ComponentActivity() {
-    private lateinit var settings: Settings
     private lateinit var keys: EncryptedKeyStore
 
     /** The message the app shows under the fields. */
     private var message by mutableStateOf<String?>(null)
-
-    /**
-     * The values of the fields.
-     *
-     * They are Compose state, so the screen redraws when the user changes
-     * one. Reading the preferences directly would give the screen a value
-     * that never changes, and every control would look dead.
-     */
-    private var serverAddress by mutableStateOf("")
-    private var captureSource by mutableStateOf(CaptureSource.SYSTEM_AUDIO)
-    private var direction by mutableStateOf(ConnectionDirection.DIAL_OUT)
 
     /**
      * The consent of the media projection.
@@ -80,12 +65,12 @@ class MainActivity : ComponentActivity() {
         onPermissionAnswered()
     }
 
-    /** The microphone permission, which the capture needs. */
-    private val permissionLauncher = registerForActivityResult(
+    /** The record permission, which the capture of the system audio needs. */
+    private val recordPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         if (!granted) {
-            message = getString(R.string.error_microphone_permission)
+            message = getString(R.string.error_record_permission)
         }
         onPermissionAnswered()
     }
@@ -107,38 +92,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        settings = Settings(this)
         keys = EncryptedKeyStore(this)
-        serverAddress = settings.serverAddress
-        captureSource = settings.captureSource
-        direction = settings.direction
 
         setContent {
             val state by SessionStateHolder.state.collectAsStateWithLifecycle()
             val serviceRuns by SessionStateHolder.running.collectAsStateWithLifecycle()
             val captureStatus by CaptureStatusHolder.state.collectAsStateWithLifecycle()
             MainScreen(
-                serverAddress = serverAddress,
-                captureSource = captureSource,
-                direction = direction,
                 pairingToken = pairingToken(),
                 state = state,
                 captureStatus = captureStatus,
                 buildLabel = buildLabel(),
                 running = serviceRuns,
                 message = message,
-                onServerAddressChange = {
-                    serverAddress = it
-                    settings.serverAddress = it
-                },
-                onCaptureSourceChange = {
-                    captureSource = it
-                    settings.captureSource = it
-                },
-                onDirectionChange = {
-                    direction = it
-                    settings.direction = it
-                },
                 onConnect = { connect() },
                 onDisconnect = { disconnect() },
                 onCopyToken = { copyToken() },
@@ -150,29 +116,22 @@ class MainActivity : ComponentActivity() {
      * Starts the capture.
      *
      * The system audio needs the consent of the media projection, so the
-     * app asks for it first. The microphone needs a permission, which the
-     * app asks for at the same time as the notifications.
+     * app asks for it first. The capture of the system audio needs the
+     * record permission, and the service needs the notification permission.
      */
     private fun connect() {
-        pendingStep = ::askForMicrophone
+        pendingStep = ::askForRecordPermission
         askFor(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    /** Asks for the microphone, and then starts the capture. */
-    private fun askForMicrophone() {
-        pendingStep = ::startCaptureWithConsent
+    /** Asks for the record permission, and then for the consent. */
+    private fun askForRecordPermission() {
+        pendingStep = ::askForProjectionConsent
         askFor(Manifest.permission.RECORD_AUDIO)
     }
 
-    /**
-     * Starts the capture, asking for the consent of the media projection
-     * first when the system audio is the source.
-     */
-    private fun startCaptureWithConsent() {
-        if (captureSource != CaptureSource.SYSTEM_AUDIO) {
-            startCapture(0, null)
-            return
-        }
+    /** Asks the user for the consent of the media projection. */
+    private fun askForProjectionConsent() {
         val manager = getSystemService(MediaProjectionManager::class.java)
         projectionLauncher.launch(manager.createScreenCaptureIntent())
     }
@@ -180,13 +139,13 @@ class MainActivity : ComponentActivity() {
     /**
      * Asks for a permission, and carries on whether it was granted.
      *
-     * The microphone capture fails without its permission, but the app
-     * still starts, so the user sees why nothing happens.
+     * The capture fails without the record permission, but the app still
+     * starts, so the user sees why nothing happens.
      */
     private fun askFor(permission: String) {
         when (permission) {
             Manifest.permission.POST_NOTIFICATIONS -> notificationLauncher.launch(permission)
-            else -> permissionLauncher.launch(permission)
+            else -> recordPermissionLauncher.launch(permission)
         }
     }
 
@@ -194,7 +153,6 @@ class MainActivity : ComponentActivity() {
     private fun startCapture(resultCode: Int, data: Intent?) {
         SendSpinService.start(
             context = this,
-            source = captureSource,
             resultCode = resultCode,
             resultData = data,
         )

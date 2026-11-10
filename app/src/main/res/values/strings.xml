@@ -3,15 +3,8 @@
     <string name="app_name">SendSpin</string>
 
     <!-- The main screen. -->
-    <string name="title_server">Music Assistant</string>
-    <string name="label_server_address">Server address</string>
-    <string name="hint_server_address">192.168.1.10</string>
-    <string name="label_capture_source">Audio source</string>
-    <string name="label_direction">Connection</string>
-    <string name="direction_dial_out">Dial out</string>
-    <string name="direction_accept_incoming">Accept incoming</string>
-    <string name="capture_system_audio">System audio</string>
-    <string name="capture_microphone">Microphone</string>
+    <string name="title_start">Send to Music Assistant</string>
+    <string name="start_explanation">The phone sends the sound it plays. Music Assistant finds the phone on the local network, so both must be on the same network.</string>
     <string name="action_connect">Connect</string>
     <string name="action_disconnect">Disconnect</string>
     <string name="action_copy_token">Copy token</string>
@@ -70,7 +63,7 @@
     <string name="notification_stop">Stop</string>
 
     <!-- The permission messages. -->
-    <string name="error_microphone_permission">The app needs the microphone to capture it.</string>
+    <string name="error_record_permission">The app needs the record permission to capture the system audio.</string>
     <string name="error_notifications_permission">Without the notification permission, the app cannot run in the background.</string>
     <string name="error_projection_denied">The app needs the screen capture to hear the system audio.</string>
 </resources>

@@ -17,29 +17,25 @@ import com.sendspin.sender.MainActivity
 import com.sendspin.sender.R
 import com.sendspin.sender.capture.AudioCapture
 import com.sendspin.sender.capture.CaptureStatusHolder
-import com.sendspin.sender.capture.MicrophoneCapture
 import com.sendspin.sender.capture.SystemAudioCapture
 import com.sendspin.sender.discovery.ServiceAdvertiser
 import com.sendspin.sender.net.InboundServer
 import com.sendspin.sender.session.SessionStateHolder
-import com.sendspin.sender.session.SourceClient
-import com.sendspin.sender.storage.ConnectionDirection
-import com.sendspin.sender.storage.CaptureSource
 import com.sendspin.sender.storage.EncryptedKeyStore
 import com.sendspin.sender.storage.Settings
 
 /**
  * The service that keeps the app alive while it streams.
  *
- * Android puts the microphone and the media projection behind a foreground
- * service, so the service holds the capture and the client. The service
- * starts before the media projection is opened, because Android 14 wants
- * the service in place first.
+ * Android puts the media projection behind a foreground service, so the
+ * service holds the capture and the server that waits for the Music
+ * Assistant server to dial in. The service starts before the media
+ * projection is opened, because Android 14 wants the service in place
+ * first.
  */
 class SendSpinService : Service() {
     private lateinit var settings: Settings
     private lateinit var keys: EncryptedKeyStore
-    private var client: SourceClient? = null
     private var inboundServer: InboundServer? = null
     private var advertiser: ServiceAdvertiser? = null
     private var capture: AudioCapture? = null
@@ -85,111 +81,78 @@ class SendSpinService : Service() {
     }
 
     /**
-     * Starts the capture and the client.
+     * Starts the capture and the server.
      *
      * The service has to be in the foreground before the media projection
      * is opened, so the notification goes up first.
      */
     private fun startEverything(intent: Intent?) {
-        if (client != null || inboundServer != null) return
-        val chosen = settings.captureSource
-        startForegroundWithType(chosen)
+        if (inboundServer != null) return
+        startForegroundWithType()
         publishRunning(true)
 
-        val captureSource: AudioCapture = if (chosen == CaptureSource.MICROPHONE) {
-            MicrophoneCapture()
-        } else {
-            val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
-            @Suppress("DEPRECATION")
-            val data = intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
-            if (resultCode == 0 || data == null) {
-                Log.e(TAG, "The media projection has no consent")
-                stopSelf()
-                return
-            }
-            val projection = getSystemService(MediaProjectionManager::class.java)
-                .getMediaProjection(resultCode, data)
-            if (projection == null) {
-                Log.e(TAG, "The media projection could not be opened")
-                stopSelf()
-                return
-            }
-            mediaProjection = projection
-            SystemAudioCapture(projection)
+        val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
+        @Suppress("DEPRECATION")
+        val data = intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+        if (resultCode == 0 || data == null) {
+            Log.e(TAG, "The media projection has no consent")
+            stopSelf()
+            return
         }
+        val projection = getSystemService(MediaProjectionManager::class.java)
+            .getMediaProjection(resultCode, data)
+        if (projection == null) {
+            Log.e(TAG, "The media projection could not be opened")
+            stopSelf()
+            return
+        }
+        mediaProjection = projection
+        val captureSource = SystemAudioCapture(projection)
         capture = captureSource
         CaptureStatusHolder.publishRunning(true)
         CaptureStatusHolder.publishError(null)
 
-        val stateListener = object : SourceClient.Listener {
-            override fun onStateChanged(state: com.sendspin.protocol.session.SourceSessionState) {
-                SessionStateHolder.publish(state)
-                updateNotification(state)
-            }
+        // The app waits for the server to dial it, so it advertises itself.
+        val inbound = InboundServer(
+            keys = keys,
+            suite = settings.cipherSuite,
+            port = ServiceAdvertiser.PORT,
+            format = InboundServer.FORMAT,
+            capture = captureSource,
+            listener = object : InboundServer.Listener {
+                override fun onStateChanged(state: com.sendspin.protocol.session.SourceSessionState) {
+                    SessionStateHolder.publish(state)
+                    updateNotification(state)
+                }
 
-            override fun onError(message: String) {
-                Log.e(TAG, "The client failed: $message")
-                updateNotification(null)
-            }
-        }
-        if (settings.direction == ConnectionDirection.ACCEPT_INCOMING) {
-            // The app waits for the server to dial it, so it advertises
-            // itself instead of dialing out.
-            val inbound = InboundServer(
-                keys = keys,
-                suite = settings.cipherSuite,
-                port = ServiceAdvertiser.PORT,
-                format = SourceClient.FORMAT,
-                capture = captureSource,
-                listener = object : InboundServer.Listener {
-                    override fun onStateChanged(state: com.sendspin.protocol.session.SourceSessionState) {
-                        SessionStateHolder.publish(state)
-                        updateNotification(state)
-                    }
-
-                    override fun onError(message: String) {
-                        Log.e(TAG, "The incoming connection failed: $message")
-                    }
-                },
+                override fun onError(message: String) {
+                    Log.e(TAG, "The incoming connection failed: $message")
+                    // The status panel shows this, so the user knows why the
+                    // phone waits for a server that never comes.
+                    CaptureStatusHolder.publishError(message)
+                }
+            },
+        )
+        inboundServer = inbound
+        // The advertisement starts only once the socket listens. A server
+        // that reads the advertisement and dials at once would otherwise
+        // find a closed port.
+        inbound.start {
+            if (inboundServer !== inbound) return@start
+            val advertiser = ServiceAdvertiser(
+                this,
+                InboundServer.DEVICE_NAME,
+                ServiceAdvertiser.PORT,
             )
-            inboundServer = inbound
-            // The advertisement starts only once the socket listens. A server
-            // that reads the advertisement and dials at once would otherwise
-            // find a closed port.
-            inbound.start {
-                if (inboundServer !== inbound) return@start
-                val advertiser = ServiceAdvertiser(
-                    this,
-                    SourceClient.DEVICE_NAME,
-                    ServiceAdvertiser.PORT,
-                )
-                advertiser.start(
-                    onFailed = { message -> Log.e(TAG, "The advertisement failed: $message") },
-                )
-                this.advertiser = advertiser
-            }
-        } else {
-            // The app dials the server, so it must not advertise itself.
-            val source = SourceClient(
-                keys = keys,
-                serverAddress = settings.serverAddress,
-                suite = settings.cipherSuite,
-                capture = captureSource,
-                listener = stateListener,
+            advertiser.start(
+                onFailed = { message -> Log.e(TAG, "The advertisement failed: $message") },
             )
-            client = source
-            source.start()
-            source.startCapture()
+            this.advertiser = advertiser
         }
     }
 
-    /** Stops the capture and the client. */
+    /** Stops the capture and the server. */
     private fun stopEverything() {
-        client?.let {
-            it.stopCapture()
-            it.stop()
-        }
-        client = null
         advertiser?.stop()
         advertiser = null
         inboundServer?.stop()
@@ -205,13 +168,8 @@ class SendSpinService : Service() {
     }
 
     /** Puts the service in the foreground, with the type the capture needs. */
-    private fun startForegroundWithType(source: CaptureSource) {
-        val type = if (source == CaptureSource.MICROPHONE) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        } else {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-        }
-        startForeground(NOTIFICATION_ID, buildNotification(), type)
+    private fun startForegroundWithType() {
+        startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
     }
 
     /** Updates the notification, so it shows the current state. */
@@ -283,13 +241,11 @@ class SendSpinService : Service() {
          * Starts the service.
          *
          * @param context the context that starts the service
-         * @param source where the audio comes from
          * @param resultCode the consent result, for the media projection
          * @param resultData the consent data, for the media projection
          */
         fun start(
             context: Context,
-            source: CaptureSource,
             resultCode: Int = 0,
             resultData: Intent? = null,
         ) {

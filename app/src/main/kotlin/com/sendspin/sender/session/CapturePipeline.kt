@@ -16,9 +16,6 @@ import com.sendspin.sender.capture.PcmBlock
  * The pipeline also measures the capture. The status panel shows how many
  * blocks arrive and how loud they are, so a silent capture can be told apart
  * from a capture that never started.
- *
- * Both connection directions use this class: the client that dials out, and
- * the server that waits for a server to dial in.
  */
 class CapturePipeline(
     private val format: SourceAudioFormat,

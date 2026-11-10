@@ -64,7 +64,6 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.security.crypto)
-    implementation(libs.okhttp)
     implementation(libs.java.websocket)
     implementation(libs.zxing.core)
 
