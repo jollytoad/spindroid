@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.sendspin.protocol.session.SessionPhase
 import com.sendspin.protocol.session.SourceSessionState
 import com.sendspin.sender.R
+import com.sendspin.sender.capture.CaptureStatus
 import com.sendspin.sender.storage.CaptureSource
 import com.sendspin.sender.storage.ConnectionDirection
 
@@ -47,6 +48,8 @@ fun MainScreen(
     direction: ConnectionDirection,
     pairingToken: String,
     state: SourceSessionState,
+    captureStatus: CaptureStatus,
+    buildLabel: String,
     running: Boolean,
     message: String?,
     onServerAddressChange: (String) -> Unit,
@@ -82,7 +85,7 @@ fun MainScreen(
 
         PairingSection(pairingToken = pairingToken, onCopyToken = onCopyToken)
 
-        StatusSection(state = state)
+        StatusSection(state = state, captureStatus = captureStatus, buildLabel = buildLabel)
 
         if (message != null) {
             Text(text = message, style = MaterialTheme.typography.bodyMedium)
@@ -245,7 +248,11 @@ private fun PairingSection(pairingToken: String, onCopyToken: () -> Unit) {
 
 /** What the connection is doing. */
 @Composable
-private fun StatusSection(state: SourceSessionState) {
+private fun StatusSection(
+    state: SourceSessionState,
+    captureStatus: CaptureStatus,
+    buildLabel: String,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -291,6 +298,34 @@ private fun StatusSection(state: SourceSessionState) {
                     },
                 ),
             )
+            HorizontalDivider()
+            StatusRow(
+                label = stringResource(R.string.label_capture),
+                value = stringResource(
+                    if (captureStatus.running) {
+                        R.string.value_capture_running
+                    } else {
+                        R.string.value_capture_stopped
+                    },
+                ),
+            )
+            StatusRow(
+                label = stringResource(R.string.label_capture_level),
+                value = stringResource(R.string.value_capture_level, captureStatus.peak * 100 / MAX_PEAK),
+            )
+            StatusRow(
+                label = stringResource(R.string.label_capture_rate),
+                value = stringResource(R.string.value_capture_rate, captureStatus.blocksPerSecond),
+            )
+            captureStatus.error?.let { error ->
+                HorizontalDivider()
+                Text(text = error, style = MaterialTheme.typography.bodyMedium)
+            }
+            HorizontalDivider()
+            StatusRow(
+                label = stringResource(R.string.label_build),
+                value = buildLabel,
+            )
             if (state.awaitingApproval) {
                 HorizontalDivider()
                 // The server holds the connection until the operator
@@ -333,3 +368,6 @@ private fun SessionPhase.label(): Int = when (this) {
 
 /** The size of the pairing code, in pixels. */
 private const val QR_SIZE = 512
+
+/** The loudest sample of a 16-bit block. */
+private const val MAX_PEAK = 32767

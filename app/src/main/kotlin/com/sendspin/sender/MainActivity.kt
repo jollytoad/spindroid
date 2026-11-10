@@ -5,8 +5,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,12 +18,16 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sendspin.protocol.crypto.X25519
 import com.sendspin.protocol.pairing.PairingToken
+import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.service.SendSpinService
 import com.sendspin.sender.session.SessionStateHolder
 import com.sendspin.sender.storage.CaptureSource
+import com.sendspin.sender.storage.ConnectionDirection
 import com.sendspin.sender.storage.EncryptedKeyStore
 import com.sendspin.sender.storage.Settings
 import com.sendspin.sender.ui.MainScreen
+import java.text.DateFormat
+import java.util.Date
 
 /**
  * The only screen of the app.
@@ -37,6 +41,17 @@ class MainActivity : ComponentActivity() {
 
     /** The message the app shows under the fields. */
     private var message by mutableStateOf<String?>(null)
+
+    /**
+     * The values of the fields.
+     *
+     * They are Compose state, so the screen redraws when the user changes
+     * one. Reading the preferences directly would give the screen a value
+     * that never changes, and every control would look dead.
+     */
+    private var serverAddress by mutableStateOf("")
+    private var captureSource by mutableStateOf(CaptureSource.SYSTEM_AUDIO)
+    private var direction by mutableStateOf(ConnectionDirection.DIAL_OUT)
 
     /**
      * The consent of the media projection.
@@ -94,21 +109,36 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         settings = Settings(this)
         keys = EncryptedKeyStore(this)
+        serverAddress = settings.serverAddress
+        captureSource = settings.captureSource
+        direction = settings.direction
 
         setContent {
             val state by SessionStateHolder.state.collectAsStateWithLifecycle()
             val serviceRuns by SessionStateHolder.running.collectAsStateWithLifecycle()
+            val captureStatus by CaptureStatusHolder.state.collectAsStateWithLifecycle()
             MainScreen(
-                serverAddress = settings.serverAddress,
-                captureSource = settings.captureSource,
-                direction = settings.direction,
+                serverAddress = serverAddress,
+                captureSource = captureSource,
+                direction = direction,
                 pairingToken = pairingToken(),
                 state = state,
+                captureStatus = captureStatus,
+                buildLabel = buildLabel(),
                 running = serviceRuns,
                 message = message,
-                onServerAddressChange = { settings.serverAddress = it },
-                onCaptureSourceChange = { settings.captureSource = it },
-                onDirectionChange = { settings.direction = it },
+                onServerAddressChange = {
+                    serverAddress = it
+                    settings.serverAddress = it
+                },
+                onCaptureSourceChange = {
+                    captureSource = it
+                    settings.captureSource = it
+                },
+                onDirectionChange = {
+                    direction = it
+                    settings.direction = it
+                },
                 onConnect = { connect() },
                 onDisconnect = { disconnect() },
                 onCopyToken = { copyToken() },
@@ -139,7 +169,7 @@ class MainActivity : ComponentActivity() {
      * first when the system audio is the source.
      */
     private fun startCaptureWithConsent() {
-        if (settings.captureSource != CaptureSource.SYSTEM_AUDIO) {
+        if (captureSource != CaptureSource.SYSTEM_AUDIO) {
             startCapture(0, null)
             return
         }
@@ -154,10 +184,6 @@ class MainActivity : ComponentActivity() {
      * still starts, so the user sees why nothing happens.
      */
     private fun askFor(permission: String) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            onPermissionAnswered()
-            return
-        }
         when (permission) {
             Manifest.permission.POST_NOTIFICATIONS -> notificationLauncher.launch(permission)
             else -> permissionLauncher.launch(permission)
@@ -168,7 +194,7 @@ class MainActivity : ComponentActivity() {
     private fun startCapture(resultCode: Int, data: Intent?) {
         SendSpinService.start(
             context = this,
-            source = settings.captureSource,
+            source = captureSource,
             resultCode = resultCode,
             resultData = data,
         )
@@ -184,6 +210,18 @@ class MainActivity : ComponentActivity() {
         X25519.publicKey(keys.staticPrivateKey),
         keys.pairingPsk,
     )
+
+    /**
+     * The version and the time of the build on the phone.
+     *
+     * The time is the moment the package was installed. It tells the builds
+     * apart, because the version number does not change.
+     */
+    private fun buildLabel(): String {
+        val info = packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+        val format = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+        return "${info.versionName} · ${format.format(Date(info.lastUpdateTime))}"
+    }
 
     /** Copies the pairing token to the clipboard. */
     private fun copyToken() {

@@ -32,14 +32,20 @@
     <string name="label_paired_servers">Paired servers</string>
     <string name="label_clock_error">Clock error</string>
     <string name="label_stream">Stream</string>
+    <string name="label_capture">Capture</string>
+    <string name="label_capture_level">Level</string>
+    <string name="label_capture_rate">Blocks</string>
+    <string name="label_build">Build</string>
     <string name="value_not_paired">Not paired</string>
     <string name="value_no_server">No server</string>
     <string name="value_yes">Yes</string>
-    <string name="value_no">No</string>
+    <string name="value_capture_running">Running</string>
+    <string name="value_capture_stopped">Stopped</string>
+    <string name="value_capture_level">%1$d %%</string>
+    <string name="value_capture_rate">%1$d per second</string>
 
     <!-- The connection states. -->
     <string name="state_idle">Idle</string>
-    <string name="state_connecting">Connecting</string>
     <string name="state_handshaking">Handshaking</string>
     <string name="state_hello">Saying hello</string>
     <string name="state_syncing">Syncing the clock</string>
