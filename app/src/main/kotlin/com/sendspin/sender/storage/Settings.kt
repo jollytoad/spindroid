@@ -2,6 +2,7 @@ package com.sendspin.sender.storage
 
 import android.content.Context
 import androidx.core.content.edit
+import com.sendspin.protocol.crypto.CipherSuiteBenchmark
 import com.sendspin.protocol.crypto.NoiseSuite
 
 /**
@@ -25,11 +26,17 @@ class Settings(context: Context) {
         )
         set(value) = preferences.edit { putString(KEY_CAPTURE_SOURCE, value.name) }
 
-    /** The cipher suite the client picks. */
+    /**
+     * The cipher suite the client picks.
+     *
+     * The suite is measured on the device, because a device without AES
+     * hardware runs the software cipher too slowly for a stream of audio.
+     * The user may pick one, and then the app keeps that choice.
+     */
     var cipherSuite: NoiseSuite
         get() = NoiseSuite.fromWireName(
-            preferences.getString(KEY_SUITE, NoiseSuite.AES_GCM_SHA256.protocolName) ?: "",
-        ) ?: NoiseSuite.AES_GCM_SHA256
+            preferences.getString(KEY_SUITE, "") ?: "",
+        ) ?: CipherSuiteBenchmark.preferredSuite()
         set(value) = preferences.edit { putString(KEY_SUITE, value.protocolName) }
 
     /**

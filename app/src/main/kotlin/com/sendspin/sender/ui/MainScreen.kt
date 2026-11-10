@@ -213,6 +213,10 @@ private fun PairingSection(pairingToken: String, onCopyToken: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
+                text = stringResource(R.string.pairing_where),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
                 text = stringResource(R.string.label_pairing_token),
                 style = MaterialTheme.typography.titleSmall,
             )
@@ -267,6 +271,12 @@ private fun StatusSection(state: SourceSessionState) {
                     stringResource(R.string.value_not_paired)
                 },
             )
+            if (state.pairedServers.isNotEmpty()) {
+                StatusRow(
+                    label = stringResource(R.string.label_paired_servers),
+                    value = state.pairedServers.joinToString(", "),
+                )
+            }
             StatusRow(
                 label = stringResource(R.string.label_clock_error),
                 value = state.clockErrorMicros?.let { "$it µs" } ?: "—",
@@ -281,6 +291,15 @@ private fun StatusSection(state: SourceSessionState) {
                     },
                 ),
             )
+            if (state.awaitingApproval) {
+                HorizontalDivider()
+                // The server holds the connection until the operator
+                // approves the client in Music Assistant.
+                Text(
+                    text = stringResource(R.string.state_awaiting_approval),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
             state.error?.let { error ->
                 HorizontalDivider()
                 Text(text = error, style = MaterialTheme.typography.bodyMedium)

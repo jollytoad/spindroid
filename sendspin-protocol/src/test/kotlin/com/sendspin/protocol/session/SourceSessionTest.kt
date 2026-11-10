@@ -24,6 +24,7 @@ import com.sendspin.protocol.protocol.ServerHelloPayload
 import com.sendspin.protocol.protocol.ServerInitPayload
 import com.sendspin.protocol.protocol.ServerPairFinalizePayload
 import com.sendspin.protocol.protocol.ServerTimePayload
+import com.sendspin.protocol.protocol.ServerUnpairPayload
 import com.sendspin.protocol.protocol.SourceCommand
 import com.sendspin.protocol.protocol.SourceSupport
 import com.sendspin.protocol.psk.ClientKeyStore
@@ -717,6 +718,66 @@ class SourceSessionTest {
         val (session, transport, server) = handshake()
         session.sendGoodbye("user_request")
         assertEquals(SessionPhase.CLOSED, session.state.phase)
+    }
+
+    @Test
+    fun `the session waits for the operator to approve it`() {
+        val (session, transport, server) = handshake()
+        sayHello(session, server)
+
+        // The server holds the connection with empty activities until the
+        // operator approves the client.
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_ACTIVATE,
+                ServerActivatePayload(activities = listOf(), activeRoles = listOf()),
+            ),
+        )
+        assertTrue(session.state.awaitingApproval)
+
+        // The operator approves it, and the activities follow.
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_ACTIVATE,
+                ServerActivatePayload(activities = listOf("playback"), activeRoles = listOf()),
+            ),
+        )
+        assertFalse(session.state.awaitingApproval)
+    }
+
+    @Test
+    fun `the session forgets the pairing when the server drops it`() {
+        val keys = TestKeyStore()
+        val (session, transport, server) = handshake(
+            keys = keys,
+            namedPskId = SendspinPsk.id(keys.pairingPsk),
+            namedCategory = "pr",
+        )
+        sayHello(session, server)
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_ACTIVATE,
+                ServerActivatePayload(
+                    activities = listOf("pairing"),
+                    activeRoles = listOf(),
+                    pairing = PairingParameters(method = "pairing_psk"),
+                ),
+            ),
+        )
+        server.nextJson(MessageType.CLIENT_PAIR_INIT)
+        server.nextJson(MessageType.CLIENT_PAIR_FINALIZE)
+        session.onBinaryMessage(
+            server.encryptJson(MessageType.SERVER_PAIR_FINALIZE, ServerPairFinalizePayload()),
+        )
+        assertEquals(1, keys.records.size)
+        assertTrue(session.state.paired)
+
+        // The server drops the pairing.
+        session.onBinaryMessage(
+            server.encryptJson(MessageType.SERVER_UNPAIR, ServerUnpairPayload()),
+        )
+        assertEquals(0, keys.records.size)
+        assertFalse(session.state.paired)
     }
 
     @Test

@@ -19,7 +19,8 @@
 
     <!-- The pairing section. -->
     <string name="title_pairing">Pairing</string>
-    <string name="pairing_explanation">Paste this token into Music Assistant to pair the phone. The token never changes, so the same one works for every server.</string>
+    <string name="pairing_explanation">Paste this token into Music Assistant, on the screen where a new input is paired. The token never changes, so the same one works for every server.</string>
+    <string name="pairing_where">Once the operator approves the phone, it shows up under Live Inputs in Music Assistant. The user then picks it as the input for a player or a group.</string>
     <string name="label_pairing_token">Pairing token</string>
     <string name="label_qr_code">Scan this code</string>
 
@@ -28,6 +29,7 @@
     <string name="label_connection">Connection</string>
     <string name="label_server_name">Server</string>
     <string name="label_paired">Paired</string>
+    <string name="label_paired_servers">Paired servers</string>
     <string name="label_clock_error">Clock error</string>
     <string name="label_stream">Stream</string>
     <string name="value_not_paired">Not paired</string>
@@ -44,6 +46,7 @@
     <string name="state_ready">Ready</string>
     <string name="state_streaming">Streaming</string>
     <string name="state_closed">Disconnected</string>
+    <string name="state_awaiting_approval">The server has not approved this phone yet. Approve it in Music Assistant, under Live Inputs.</string>
 
     <!-- The stream states. -->
     <string name="stream_stopped">Stopped</string>

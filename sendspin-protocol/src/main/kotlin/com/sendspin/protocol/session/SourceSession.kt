@@ -142,7 +142,11 @@ public class SourceSession(
             ),
         )
         clientInitBytes = init
-        currentState = currentState.copy(phase = SessionPhase.HANDSHAKING, error = null)
+        currentState = currentState.copy(
+            phase = SessionPhase.HANDSHAKING,
+            error = null,
+            pairedServers = pairedServerNames(),
+        )
         publish()
         transport.sendText(String(init, Charsets.UTF_8))
     }
@@ -159,7 +163,7 @@ public class SourceSession(
         when (type) {
             MessageType.SERVER_INIT -> onServerInit(bytes)
             MessageType.NOISE_HANDSHAKE -> onNoiseHandshake(bytes)
-            MessageType.SERVER_ERROR -> fail("The server refused the connection")
+            MessageType.SERVER_ERROR -> fail(SERVER_REFUSED)
             else -> Unit
         }
     }
@@ -400,6 +404,7 @@ public class SourceSession(
             MessageType.SERVER_TIME -> onServerTime(payload)
             MessageType.SERVER_COMMAND -> onServerCommand(payload)
             MessageType.SERVER_PAIR_FINALIZE -> onServerPairFinalize()
+            MessageType.SERVER_UNPAIR -> onServerUnpair()
             MessageType.PAIR_ABORT -> onPairAbort(payload)
             MessageType.NOISE_HANDSHAKE -> onRehandshake(payload)
             else -> Unit
@@ -447,7 +452,13 @@ public class SourceSession(
         // out, so the client keeps them until the server removes them.
         val wasSourceActive = isSourceActive()
         activeRoles = activate.activeRoles ?: activeRoles
-        currentState = currentState.copy(activities = activities, activeRoles = activeRoles)
+        currentState = currentState.copy(
+            activities = activities,
+            activeRoles = activeRoles,
+            // The server holds the connection with empty activities until
+            // the operator approves the client.
+            awaitingApproval = activities.isEmpty(),
+        )
         publish()
         if (activate.pairing != null) {
             onPairingRequested(activate)
@@ -519,9 +530,33 @@ public class SourceSession(
             ),
         )
         paired = true
-        currentState = currentState.copy(paired = true, pairingInProgress = false)
+        currentState = currentState.copy(
+            paired = true,
+            pairingInProgress = false,
+            pairedServers = pairedServerNames(),
+        )
         publish()
     }
+
+    /**
+     * Handles the `server/unpair` message.
+     *
+     * The server dropped the pairing, so the client forgets the record.
+     */
+    private fun onServerUnpair() {
+        val server = serverId ?: return
+        keys.removeLongTerm(server)
+        paired = false
+        currentState = currentState.copy(
+            paired = false,
+            pairedServers = pairedServerNames(),
+        )
+        publish()
+    }
+
+    /** The names of the servers this client is paired with. */
+    private fun pairedServerNames(): List<String> =
+        keys.longTermRecords().map { it.serverName }
 
     /** Handles the `pair/abort` message. */
     private fun onPairAbort(payload: ByteArray) {
@@ -797,6 +832,15 @@ public class SourceSession(
 
         /** The role this session offers. */
         public const val SOURCE_ROLE: String = "source@v1"
+
+        /**
+         * The reason the session gives when the server refuses.
+         *
+         * A server that refuses the connection usually did not take the
+         * cipher suite the client offered. The client uses this text to
+         * recognise that case and offer the other suite.
+         */
+        public const val SERVER_REFUSED: String = "The server refused the connection"
 
         /** The pairing method this session offers. */
         public const val PAIRING_METHOD: String = "pairing_psk"

@@ -48,6 +48,14 @@ public data class SourceSessionState(
     public val pairingInProgress: Boolean = false,
     /** The purposes the server declared. */
     public val activities: List<String> = emptyList(),
+    /**
+     * The server has not approved the client yet.
+     *
+     * The server holds the connection with empty activities until the
+     * operator approves it. The user interface shows that state, because
+     * nothing else happens while it lasts.
+     */
+    public val awaitingApproval: Boolean = false,
     /** The roles the server activated. */
     public val activeRoles: List<String> = emptyList(),
     /** The client offers its audio to the server. */
@@ -60,6 +68,13 @@ public data class SourceSessionState(
     public val serverRequestedAudio: Boolean = false,
     /** The client is sending audio to the server. */
     public val streaming: Boolean = false,
+    /**
+     * The names of the servers this client is paired with.
+     *
+     * The list comes from the pairing records the client keeps, so it
+     * survives a reconnect.
+     */
+    public val pairedServers: List<String> = emptyList(),
     /** The last error, when the session failed. */
     public val error: String? = null,
 )

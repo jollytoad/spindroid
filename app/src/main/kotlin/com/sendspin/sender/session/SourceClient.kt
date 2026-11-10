@@ -1,6 +1,7 @@
 package com.sendspin.sender.session
 
 import android.util.Log
+import com.sendspin.protocol.codec.PcmChunker
 import com.sendspin.protocol.codec.PcmResampler
 import com.sendspin.protocol.crypto.NoiseSuite
 import com.sendspin.protocol.psk.ClientKeyStore
@@ -99,7 +100,7 @@ class SourceClient(
             listener = sessionListener,
             configuration = SourceSessionConfiguration(
                 clientName = DEVICE_NAME,
-                suite = suite,
+                suite = currentSuite,
                 format = FORMAT,
             ),
         )
@@ -116,6 +117,19 @@ class SourceClient(
         )
     }
 
+    /**
+     * The suite the client offers.
+     *
+     * The server may not take the suite the client picked. When it refuses
+     * the connection, the client offers the other one. That happens once,
+     * because a server that refuses both suites does not want the client at
+     * all.
+     */
+    private var currentSuite: NoiseSuite = suite
+
+    /** Whether the client already offered the other suite. */
+    private var triedOtherSuite = false
+
     /** Handles a connection that dropped. */
     private fun onConnectionLost(reason: String) {
         if (!running) return
@@ -126,6 +140,22 @@ class SourceClient(
             serverRequestedAudio = false,
         )
         listener.onStateChanged(state)
+        if (reason == SourceSession.SERVER_REFUSED) {
+            // The server did not take the suite the client offered. The
+            // other one is tried at once, because the server is there and
+            // the answer will not change.
+            if (!triedOtherSuite) {
+                triedOtherSuite = true
+                currentSuite = if (currentSuite == NoiseSuite.AES_GCM_SHA256) {
+                    NoiseSuite.CHACHA_POLY_SHA256
+                } else {
+                    NoiseSuite.AES_GCM_SHA256
+                }
+                Log.i(TAG, "The server refused the suite, trying ${currentSuite.protocolName}")
+                scheduler.schedule({ connect() }, 0, TimeUnit.MILLISECONDS)
+                return
+            }
+        }
         scheduleReconnect()
     }
 
@@ -168,13 +198,24 @@ class SourceClient(
                 targetRate = FORMAT.sampleRate,
                 targetChannels = FORMAT.channels,
             )
-            session?.onCapturedAudio(toBytes(converted), block.captureTimestampMicros)
+            // The specification wants each chunk to hold between five and
+            // one hundred fifty milliseconds, so the samples wait until a
+            // chunk is full.
+            for (chunk in chunker.offer(converted, block.captureTimestampMicros)) {
+                session?.onCapturedAudio(toBytes(chunk.samples), chunk.timestampMicros)
+            }
         }
 
         override fun onError(message: String) {
             listener.onError(message)
         }
     }
+
+    /** The samples that wait for a full chunk. */
+    private val chunker = PcmChunker(
+        sampleRate = FORMAT.sampleRate,
+        channels = FORMAT.channels,
+    )
 
     /** Starts the capture, once the client runs. */
     fun startCapture() {

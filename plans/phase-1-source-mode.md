@@ -9,6 +9,82 @@ user plays the phone's audio on any speaker or group.
 This phase delivers the goal of the project on its own. Phase 2 is optional
 extra work.
 
+## Status
+
+The code is complete. Every task below is done, and the test suite has 174
+tests. The tests run on the JVM without an emulator, and they cover the
+session, the pairing, the framing, the resampling, and the admission rules.
+
+What is **not** proven yet is the behaviour on a real phone. No device was
+attached to the build machine, so the capture, the foreground service, and
+the reconnect after a screen-off were never exercised on hardware. The exit
+criteria that need a device are therefore open:
+
+| Exit criterion | State |
+| --- | --- |
+| The app builds and installs on a physical device running Android 13 or later | The build succeeds. The install was not tried. |
+| Music Assistant shows the phone under Live Inputs after the user pastes the pairing token | Open. Needs a real Music Assistant server. |
+| The user can select the phone as an input in Music Assistant, and the audio plays on a speaker | Open. Needs a real server and a real capture. |
+| The clock error settles below 1 ms in the status panel | Proven against the test server. The filter settles at a few tens of microseconds over a local socket. |
+| The app survives a screen-off and a network drop. It reconnects on its own. | Open. The reconnect is written, but not run on a device. |
+| The app uses AES-GCM by default and falls back to ChaCha-Poly on a device without hardware AES | Written. The benchmark picks the suite, and the client offers the other one when the server refuses. |
+
+| Deliverable | Where |
+| --- | --- |
+| The client session | `sendspin-protocol/src/main/kotlin/com/sendspin/protocol/session/SourceSession.kt` |
+| The pairing flow and the PSK store | `.../psk/`, `.../pairing/` |
+| The capture, the resampler, and the chunker | `app/.../capture/`, `sendspin-protocol/.../codec/` |
+| The foreground service | `app/.../service/SendSpinService.kt` |
+| The dial-out and the accept-incoming paths | `app/.../net/`, `app/.../discovery/` |
+| The screen | `app/.../ui/MainScreen.kt` |
+| A second implementation of the server side | `tools/test_server.py` |
+
+### Notes on what the work found
+
+Six things were harder than they looked, and each one is now covered by a
+test.
+
+1. **The framing layer adds the message type byte.** The session sends a
+   JSON body without a type, and the fragmenter puts the type in front of
+   it. Adding the byte twice produced a message the server could not read.
+
+2. **The cipher counts the messages it carries.** A Noise channel decrypts
+   in order, so a server cannot pick the last message out of a queue. The
+   test server and the tests both drain the messages in the order they
+   arrived.
+
+3. **The audio chunk timestamp is a big-endian 64-bit number.** The
+   reference implementation writes it that way. The Kotlin does the same,
+   and the independent server in `tools/test_server.py` was the thing that
+   got it wrong.
+
+4. **The clock filter ignores a measurement with no error.** A round trip
+   that took no time at all gives an error of zero, and the filter drops
+   that sample. The filter needs three accepted samples before the session
+   reports itself available, and each of them comes from a burst of eight
+   exchanges.
+
+5. **The app must send chunks of a fixed length.** The capture hands over
+   whatever the device gives, which may be far more than the 150
+   milliseconds the specification allows. The chunker gathers the samples
+   until a chunk is full.
+
+6. **The server may refuse the cipher suite.** The client measures the
+   cipher on the device and picks the faster suite. When the server refuses
+   it anyway, the client offers the other one, once.
+
+### The second implementation
+
+`tools/test_server.py` is a server that was written from the specification
+rather than from the Kotlin code. The interop test
+(`sendspin-protocol/src/test/kotlin/com/sendspin/protocol/session/InteropTest.kt`)
+drives the session against it over a real socket, and checks the whole
+exchange: the handshake with the pairing key, the hello, the clock
+synchronisation, the state report, the stream start, and the audio chunks.
+
+The test skips itself when the machine has no Python, or no `cryptography`
+package for it.
+
 ## Deliverables
 
 1. A client session that offers the `source@v1` role.
