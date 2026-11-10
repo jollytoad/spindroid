@@ -38,9 +38,6 @@ class MainActivity : ComponentActivity() {
     /** The message the app shows under the fields. */
     private var message by mutableStateOf<String?>(null)
 
-    /** Whether the service is running. */
-    private var running by mutableStateOf(false)
-
     /**
      * The consent of the media projection.
      *
@@ -100,13 +97,14 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val state by SessionStateHolder.state.collectAsStateWithLifecycle()
+            val serviceRuns by SessionStateHolder.running.collectAsStateWithLifecycle()
             MainScreen(
                 serverAddress = settings.serverAddress,
                 captureSource = settings.captureSource,
                 direction = settings.direction,
                 pairingToken = pairingToken(),
                 state = state,
-                running = running,
+                running = serviceRuns,
                 message = message,
                 onServerAddressChange = { settings.serverAddress = it },
                 onCaptureSourceChange = { settings.captureSource = it },
@@ -174,13 +172,11 @@ class MainActivity : ComponentActivity() {
             resultCode = resultCode,
             resultData = data,
         )
-        running = true
     }
 
     /** Stops the service. */
     private fun disconnect() {
         stopService(Intent(this, SendSpinService::class.java))
-        running = false
     }
 
     /** The token the operator pastes into Music Assistant. */

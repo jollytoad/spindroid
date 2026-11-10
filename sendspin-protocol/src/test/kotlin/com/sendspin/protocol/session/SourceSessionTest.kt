@@ -50,7 +50,8 @@ class SourceSessionTest {
      * The clock the test moves by hand.
      *
      * The clock has to advance, because the filter ignores a measurement
-     * that does not arrive later than the one before it.
+     * that does not arrive later than the one before it. The value is
+     * atomic, because the concurrency test moves it from another thread.
      */
     private val clock = TestClock()
 
@@ -66,14 +67,30 @@ class SourceSessionTest {
     private val roundTrip = 1_000L
 
     /** A clock the test moves by hand. */
-    private class TestClock(var now: Long = 1_000_000L) : SessionClock {
-        override fun nowMicros(): Long = now
+    private class TestClock(start: Long = 1_000_000L) : SessionClock {
+        private val value = java.util.concurrent.atomic.AtomicLong(start)
+
+        /** The current time of the clock. */
+        var now: Long
+            get() = value.get()
+            set(value) {
+                this.value.set(value)
+            }
+
+        override fun nowMicros(): Long = value.get()
     }
 
     /** A transport that records what the session sends. */
     private class TestTransport : SessionTransport {
         val texts = mutableListOf<String>()
-        val binaries = mutableListOf<ByteArray>()
+
+        /**
+         * The binary messages the session sent.
+         *
+         * The list is copied on write, because the concurrency test sends
+         * from more than one thread.
+         */
+        val binaries = java.util.concurrent.CopyOnWriteArrayList<ByteArray>()
 
         override fun sendText(text: String) {
             texts += text
@@ -711,6 +728,77 @@ class SourceSessionTest {
             ),
         )
         assertEquals(SessionPhase.HELLO, session.state.phase)
+    }
+
+    @Test
+    fun `the session survives a clock poll and audio at the same time`() {
+        val (session, transport, server) = handshake()
+        sayHello(session, server)
+        activateSource(session, server)
+
+        val running = java.util.concurrent.atomic.AtomicBoolean(true)
+        val exchanges = java.util.concurrent.atomic.AtomicInteger(0)
+
+        // The server answers the clock exchanges.
+        val serverThread = Thread {
+            while (running.get()) {
+                for (sent in server.timeExchanges()) {
+                    exchanges.incrementAndGet()
+                    clock.now += roundTrip
+                    session.onBinaryMessage(
+                        server.encryptJson(
+                            MessageType.SERVER_TIME,
+                            ServerTimePayload(
+                                clientTransmitted = sent.clientTransmitted,
+                                serverReceived = serverEpoch + sent.clientTransmitted,
+                                serverTransmitted = serverEpoch + sent.clientTransmitted + 100,
+                            ),
+                        ),
+                    )
+                }
+                Thread.sleep(1)
+            }
+        }
+
+        // The timer polls the clock, the way the app does. It spins, so
+        // the timer and the socket are as close to each other as they can
+        // get.
+        val timerThread = Thread {
+            while (running.get()) {
+                session.pollClock()
+            }
+        }
+
+        // The capture feeds audio, the way the app does.
+        val captureThread = Thread {
+            while (running.get()) {
+                session.onCapturedAudio(ByteArray(64), clock.now)
+                Thread.sleep(1)
+            }
+        }
+
+        serverThread.start()
+        timerThread.start()
+        captureThread.start()
+
+        val deadline = System.currentTimeMillis() + 30_000
+        while (System.currentTimeMillis() < deadline && !session.state.clockConverged) {
+            Thread.sleep(5)
+        }
+        running.set(false)
+        serverThread.join(2000)
+        timerThread.join(2000)
+        captureThread.join(2000)
+
+        // The clock still converges, and the cipher stayed in order.
+        assertTrue(session.state.clockConverged, "The clock did not converge")
+        assertTrue(session.state.available, "The session did not report itself available")
+        // Three bursts of eight exchanges are enough. More than that means
+        // the timer and the socket sent exchanges over each other.
+        assertTrue(
+            exchanges.get() <= 8 * (SourceSession.CONVERGED_SAMPLES + 2),
+            "The session sent ${exchanges.get()} exchanges, which is more than the bursts need",
+        )
     }
 
     @Test

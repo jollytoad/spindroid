@@ -72,6 +72,16 @@ class SendSpinService : Service() {
     }
 
     /**
+     * Says that the service runs.
+     *
+     * The screen shows a disconnect button instead of a connect button
+     * while the service runs, so it has to know.
+     */
+    private fun publishRunning(isRunning: Boolean) {
+        SessionStateHolder.publishRunning(isRunning)
+    }
+
+    /**
      * Starts the capture and the client.
      *
      * The service has to be in the foreground before the media projection
@@ -81,6 +91,7 @@ class SendSpinService : Service() {
         if (client != null) return
         val chosen = settings.captureSource
         startForegroundWithType(chosen)
+        publishRunning(true)
 
         val captureSource: AudioCapture = if (chosen == CaptureSource.MICROPHONE) {
             MicrophoneCapture()
@@ -169,6 +180,7 @@ class SendSpinService : Service() {
         capture = null
         mediaProjection?.stop()
         mediaProjection = null
+        publishRunning(false)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

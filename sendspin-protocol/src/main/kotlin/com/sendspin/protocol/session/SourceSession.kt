@@ -78,6 +78,15 @@ public class SourceSession(
     private val resolver = ClientPskResolver(keys)
     private val random = SecureRandom()
 
+    /**
+     * The lock that keeps the session in order.
+     *
+     * The session is driven from two threads. The messages arrive on the
+     * thread of the socket, and the clock is polled on a timer. Both touch
+     * the clock filter and the stream flags, so they take the same lock.
+     */
+    private val lock = Any()
+
     /** The client's own identifier, which is the public key in base64url. */
     public val clientId: String = Base64Url.encode(X25519.publicKey(keys.staticPrivateKey))
 
@@ -160,11 +169,13 @@ public class SourceSession(
     public fun onTextMessage(text: String) {
         val bytes = text.toByteArray(Charsets.UTF_8)
         val type = runCatching { codec.typeOf(bytes) }.getOrNull() ?: return
-        when (type) {
-            MessageType.SERVER_INIT -> onServerInit(bytes)
-            MessageType.NOISE_HANDSHAKE -> onNoiseHandshake(bytes)
-            MessageType.SERVER_ERROR -> fail(SERVER_REFUSED)
-            else -> Unit
+        synchronized(lock) {
+            when (type) {
+                MessageType.SERVER_INIT -> onServerInit(bytes)
+                MessageType.NOISE_HANDSHAKE -> onNoiseHandshake(bytes)
+                MessageType.SERVER_ERROR -> fail(SERVER_REFUSED)
+                else -> Unit
+            }
         }
     }
 
@@ -184,10 +195,12 @@ public class SourceSession(
 
     /** The transport closed. */
     public fun onTransportClosed() {
-        if (currentState.phase == SessionPhase.CLOSED) return
-        currentState = currentState.copy(phase = SessionPhase.CLOSED, streaming = false)
-        publish()
-        listener.onClosed("The connection closed")
+        synchronized(lock) {
+            if (currentState.phase == SessionPhase.CLOSED) return
+            currentState = currentState.copy(phase = SessionPhase.CLOSED, streaming = false)
+            publish()
+            listener.onClosed("The connection closed")
+        }
     }
 
     /**
@@ -201,18 +214,21 @@ public class SourceSession(
      * asked for audio.
      */
     public fun onCapturedAudio(pcm: ByteArray, captureTimestampMicros: Long) {
-        if (!startAuthorized) return
-        if (!streaming) openStream()
-        if (!streaming) return
-        val now = clock.nowMicros()
-        // The backlog guard: audio that waited too long is stale, and the
-        // server would play it out of time. Drop it and resume from live.
-        if (now - captureTimestampMicros > MAX_BACKLOG_MICROS) return
-        val timestamp = filter.computeServerTime(captureTimestampMicros)
-        sendEncrypted(
-            MessageId.SOURCE_AUDIO,
-            AudioChunk.sourceBody(timestamp, pcm),
-        )
+        synchronized(lock) {
+            if (!startAuthorized) return
+            if (!streaming) openStream()
+            if (!streaming) return
+            val now = clock.nowMicros()
+            // The backlog guard: audio that waited too long is stale, and
+            // the server would play it out of time. Drop it and resume
+            // from live.
+            if (now - captureTimestampMicros > MAX_BACKLOG_MICROS) return
+            val timestamp = filter.computeServerTime(captureTimestampMicros)
+            sendEncrypted(
+                MessageId.SOURCE_AUDIO,
+                AudioChunk.sourceBody(timestamp, pcm),
+            )
+        }
     }
 
     /**
@@ -223,28 +239,31 @@ public class SourceSession(
      * the later ones on an ordered transport.
      */
     public fun pollClock() {
-        if (currentState.phase != SessionPhase.SYNCING && currentState.phase != SessionPhase.READY) {
-            return
-        }
-        val now = clock.nowMicros()
-        val pending = pendingExchange
-        if (pending != null) {
-            // A reply that never arrives means the server stopped answering.
-            // The exchange is given a little room before the session gives up.
-            if (now - pending > EXCHANGE_TIMEOUT_MICROS) {
-                fail("The server stopped answering the clock")
+        synchronized(lock) {
+            if (currentState.phase != SessionPhase.SYNCING && currentState.phase != SessionPhase.READY) {
+                return
             }
-            return
+            val now = clock.nowMicros()
+            val pending = pendingExchange
+            if (pending != null) {
+                // A reply that never arrives means the server stopped
+                // answering. The exchange is given a little room before the
+                // session gives up.
+                if (now - pending > EXCHANGE_TIMEOUT_MICROS) {
+                    fail("The server stopped answering the clock")
+                }
+                return
+            }
+            if (!burstRunning) {
+                // Once the filter has enough samples, the bursts settle down
+                // to one every nine seconds. Until then they follow each
+                // other, so the clock converges quickly.
+                if (isConverged() && !burst.canStartBurst(now)) return
+                burst.startBurst(now)
+                burstRunning = true
+            }
+            sendTimeExchange()
         }
-        if (!burstRunning) {
-            // Once the filter has enough samples, the bursts settle down to
-            // one every nine seconds. Until then they follow each other, so
-            // the clock converges quickly.
-            if (isConverged() && !burst.canStartBurst(now)) return
-            burst.startBurst(now)
-            burstRunning = true
-        }
-        sendTimeExchange()
     }
 
     /**
@@ -398,16 +417,20 @@ public class SourceSession(
             return
         }
         val type = runCatching { codec.typeOf(payload) }.getOrNull() ?: return
-        when (type) {
-            MessageType.SERVER_HELLO -> onServerHello(payload)
-            MessageType.SERVER_ACTIVATE -> onServerActivate(payload)
-            MessageType.SERVER_TIME -> onServerTime(payload)
-            MessageType.SERVER_COMMAND -> onServerCommand(payload)
-            MessageType.SERVER_PAIR_FINALIZE -> onServerPairFinalize()
-            MessageType.SERVER_UNPAIR -> onServerUnpair()
-            MessageType.PAIR_ABORT -> onPairAbort(payload)
-            MessageType.NOISE_HANDSHAKE -> onRehandshake(payload)
-            else -> Unit
+        // The clock and the stream flags are shared with the timer thread,
+        // so the handlers take the same lock.
+        synchronized(lock) {
+            when (type) {
+                MessageType.SERVER_HELLO -> onServerHello(payload)
+                MessageType.SERVER_ACTIVATE -> onServerActivate(payload)
+                MessageType.SERVER_TIME -> onServerTime(payload)
+                MessageType.SERVER_COMMAND -> onServerCommand(payload)
+                MessageType.SERVER_PAIR_FINALIZE -> onServerPairFinalize()
+                MessageType.SERVER_UNPAIR -> onServerUnpair()
+                MessageType.PAIR_ABORT -> onPairAbort(payload)
+                MessageType.NOISE_HANDSHAKE -> onRehandshake(payload)
+                else -> Unit
+            }
         }
     }
 
