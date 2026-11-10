@@ -7,8 +7,8 @@ import androidx.security.crypto.MasterKey
 import com.sendspin.protocol.crypto.Base64Url
 import com.sendspin.protocol.crypto.X25519
 import com.sendspin.protocol.psk.ClientKeyStore
-import com.sendspin.protocol.psk.PskCategory
 import com.sendspin.protocol.psk.PskRecord
+import com.sendspin.protocol.psk.PskRecordCodec
 import java.security.SecureRandom
 
 /**
@@ -93,34 +93,12 @@ class EncryptedKeyStore(
     }
 
     /** The records, most recently used first. */
-    private fun records(): List<PskRecord> {
-        val text = preferences.getString(KEY_RECORDS, null) ?: return emptyList()
-        val out = mutableListOf<PskRecord>()
-        for (line in text.split(RECORD_SEPARATOR)) {
-            if (line.isEmpty()) continue
-            val parts = line.split(RECORD_FIELD_SEPARATOR)
-            if (parts.size != 3) continue
-            val psk = Base64Url.decode(parts[2]) ?: continue
-            out += PskRecord(
-                serverId = parts[0],
-                psk = psk,
-                serverName = parts[1],
-                category = PskCategory.LONG_TERM,
-            )
-        }
-        return out
-    }
+    private fun records(): List<PskRecord> =
+        PskRecordCodec.decode(preferences.getString(KEY_RECORDS, null).orEmpty())
 
     /** Writes the records, most recently used first. */
     private fun write(records: List<PskRecord>) {
-        val text = records.joinToString(RECORD_SEPARATOR) { record ->
-            listOf(
-                record.serverId,
-                record.serverName,
-                Base64Url.encode(record.psk),
-            ).joinToString(RECORD_FIELD_SEPARATOR)
-        }
-        preferences.edit().putString(KEY_RECORDS, text).apply()
+        preferences.edit().putString(KEY_RECORDS, PskRecordCodec.encode(records)).apply()
     }
 
     private companion object {
@@ -132,8 +110,5 @@ class EncryptedKeyStore(
 
         /** The number of records the store keeps. The specification wants at least five. */
         const val CAPACITY = 5
-
-        const val RECORD_SEPARATOR = "\n"
-        const val RECORD_FIELD_SEPARATOR = " "
     }
 }
