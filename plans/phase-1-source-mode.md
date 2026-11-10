@@ -180,7 +180,7 @@ package for it.
    shared across devices.
 3. Build the pairing token. The payload is the client public key, then the
    pairing PSK.
-4. Show the token on a screen. Offer a copy button and a QR code.
+4. Show the token on a screen. Offer a copy button.
 5. Handle the pairing flow. On a `server/activate` with
    `pairing.method` set to `pairing_psk`:
    - Check that the matched PSK is the pairing PSK. Abort with
@@ -237,8 +237,7 @@ capture, and to see the state.
 1. Write the main screen. It shows the connect button and the status line.
    There is no picker, because the app has one capture source and one
    connection direction.
-2. Write the pairing section. It shows the token, a copy button, and a QR
-   code.
+2. Write the pairing section. It shows the token and a copy button.
 3. Write the status panel. It shows:
    - The server name and the connection state.
    - The pairing state and the paired server names.

@@ -1,11 +1,9 @@
 package com.sendspin.sender.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -16,9 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -130,18 +126,6 @@ private fun PairingSection(pairingToken: String, onCopyToken: () -> Unit) {
                 text = pairingToken,
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             )
-            val code = remember(pairingToken) { QrCode.render(pairingToken, QR_SIZE) }
-            if (code != null) {
-                Text(
-                    text = stringResource(R.string.label_qr_code),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Image(
-                    bitmap = code.asImageBitmap(),
-                    contentDescription = stringResource(R.string.label_qr_code),
-                    modifier = Modifier.height(QR_SIZE.dp),
-                )
-            }
             OutlinedButton(onClick = onCopyToken) {
                 Text(stringResource(R.string.action_copy_token))
             }
@@ -268,9 +252,6 @@ private fun SessionPhase.label(): Int = when (this) {
     SessionPhase.STREAMING -> R.string.state_streaming
     SessionPhase.CLOSED -> R.string.state_closed
 }
-
-/** The size of the pairing code, in pixels. */
-private const val QR_SIZE = 512
 
 /** The loudest sample of a 16-bit block. */
 private const val MAX_PEAK = 32767

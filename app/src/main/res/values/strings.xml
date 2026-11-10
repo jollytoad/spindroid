@@ -15,7 +15,6 @@
     <string name="pairing_explanation">Paste this token into Music Assistant, on the screen where a new input is paired. The token never changes, so the same one works for every server.</string>
     <string name="pairing_where">Once the operator approves the phone, it shows up under Live Inputs in Music Assistant. The user then picks it as the input for a player or a group.</string>
     <string name="label_pairing_token">Pairing token</string>
-    <string name="label_qr_code">Scan this code</string>
 
     <!-- The status panel. -->
     <string name="title_status">Status</string>
