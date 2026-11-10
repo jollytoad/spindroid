@@ -10,13 +10,13 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
-import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.sendspin.sender.MainActivity
 import com.sendspin.sender.R
 import com.sendspin.sender.capture.AudioCapture
+import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.capture.MicrophoneCapture
 import com.sendspin.sender.capture.SystemAudioCapture
 import com.sendspin.sender.discovery.ServiceAdvertiser
@@ -63,7 +63,10 @@ class SendSpinService : Service() {
 
             else -> startEverything(intent)
         }
-        return START_STICKY
+        // The capture needs the permission and the media projection consent
+        // of this run, so a restart without them would fail. The user starts
+        // the service again instead.
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -88,7 +91,7 @@ class SendSpinService : Service() {
      * is opened, so the notification goes up first.
      */
     private fun startEverything(intent: Intent?) {
-        if (client != null) return
+        if (client != null || inboundServer != null) return
         val chosen = settings.captureSource
         startForegroundWithType(chosen)
         publishRunning(true)
@@ -115,6 +118,8 @@ class SendSpinService : Service() {
             SystemAudioCapture(projection)
         }
         capture = captureSource
+        CaptureStatusHolder.publishRunning(true)
+        CaptureStatusHolder.publishError(null)
 
         val stateListener = object : SourceClient.Listener {
             override fun onStateChanged(state: com.sendspin.protocol.session.SourceSessionState) {
@@ -134,6 +139,8 @@ class SendSpinService : Service() {
                 keys = keys,
                 suite = settings.cipherSuite,
                 port = ServiceAdvertiser.PORT,
+                format = SourceClient.FORMAT,
+                capture = captureSource,
                 listener = object : InboundServer.Listener {
                     override fun onStateChanged(state: com.sendspin.protocol.session.SourceSessionState) {
                         SessionStateHolder.publish(state)
@@ -146,10 +153,21 @@ class SendSpinService : Service() {
                 },
             )
             inboundServer = inbound
-            inbound.start()
-            val advertiser = ServiceAdvertiser(this, SourceClient.DEVICE_NAME, ServiceAdvertiser.PORT)
-            advertiser.start()
-            this.advertiser = advertiser
+            // The advertisement starts only once the socket listens. A server
+            // that reads the advertisement and dials at once would otherwise
+            // find a closed port.
+            inbound.start {
+                if (inboundServer !== inbound) return@start
+                val advertiser = ServiceAdvertiser(
+                    this,
+                    SourceClient.DEVICE_NAME,
+                    ServiceAdvertiser.PORT,
+                )
+                advertiser.start(
+                    onFailed = { message -> Log.e(TAG, "The advertisement failed: $message") },
+                )
+                this.advertiser = advertiser
+            }
         } else {
             // The app dials the server, so it must not advertise itself.
             val source = SourceClient(
@@ -178,6 +196,7 @@ class SendSpinService : Service() {
         inboundServer = null
         capture?.stop()
         capture = null
+        CaptureStatusHolder.reset()
         mediaProjection?.stop()
         mediaProjection = null
         publishRunning(false)
@@ -192,11 +211,7 @@ class SendSpinService : Service() {
         } else {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, buildNotification(), type)
-        } else {
-            startForeground(NOTIFICATION_ID, buildNotification())
-        }
+        startForeground(NOTIFICATION_ID, buildNotification(), type)
     }
 
     /** Updates the notification, so it shows the current state. */
@@ -240,7 +255,6 @@ class SendSpinService : Service() {
 
     /** Creates the notification channel. */
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             CHANNEL_ID,
             getString(R.string.notification_channel),

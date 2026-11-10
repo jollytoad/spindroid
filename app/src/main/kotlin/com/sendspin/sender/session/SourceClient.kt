@@ -1,8 +1,6 @@
 package com.sendspin.sender.session
 
 import android.util.Log
-import com.sendspin.protocol.codec.PcmChunker
-import com.sendspin.protocol.codec.PcmResampler
 import com.sendspin.protocol.crypto.NoiseSuite
 import com.sendspin.protocol.psk.ClientKeyStore
 import com.sendspin.protocol.session.ReconnectPolicy
@@ -13,8 +11,7 @@ import com.sendspin.protocol.session.SourceSessionConfiguration
 import com.sendspin.protocol.session.SourceSessionListener
 import com.sendspin.protocol.session.SourceSessionState
 import com.sendspin.sender.capture.AudioCapture
-import com.sendspin.sender.capture.CaptureListener
-import com.sendspin.sender.capture.PcmBlock
+import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.net.WebSocketTransport
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -217,54 +214,26 @@ class SourceClient(
     }
 
     /** The capture hands the audio over. */
-    private val captureListener = object : CaptureListener {
-        override fun onBlock(block: PcmBlock) {
-            val converted = PcmResampler.convert(
-                samples = block.samples,
-                channels = block.channels,
-                sourceRate = block.sampleRate,
-                targetRate = FORMAT.sampleRate,
-                targetChannels = FORMAT.channels,
-            )
-            // The specification wants each chunk to hold between five and
-            // one hundred fifty milliseconds, so the samples wait until a
-            // chunk is full.
-            for (chunk in chunker.offer(converted, block.captureTimestampMicros)) {
-                session?.onCapturedAudio(toBytes(chunk.samples), chunk.timestampMicros)
-            }
-        }
-
-        override fun onError(message: String) {
+    private val pipeline = CapturePipeline(
+        format = FORMAT,
+        onChunk = { pcm, timestamp -> session?.onCapturedAudio(pcm, timestamp) },
+        onCaptureError = { message ->
+            CaptureStatusHolder.publishError(message)
             listener.onError(message)
-        }
-    }
-
-    /** The samples that wait for a full chunk. */
-    private val chunker = PcmChunker(
-        sampleRate = FORMAT.sampleRate,
-        channels = FORMAT.channels,
+        },
+        onMeasurements = { blocks, peak ->
+            CaptureStatusHolder.publishMeasurements(blocks, peak)
+        },
     )
 
     /** Starts the capture, once the client runs. */
     fun startCapture() {
-        capture.start(captureListener)
+        capture.start(pipeline)
     }
 
     /** Stops the capture. */
     fun stopCapture() {
         capture.stop()
-    }
-
-    /** Turns the samples into the little-endian bytes the protocol carries. */
-    private fun toBytes(samples: ShortArray): ByteArray {
-        val out = ByteArray(samples.size * 2)
-        var index = 0
-        for (sample in samples) {
-            out[index] = (sample.toInt() and 0xFF).toByte()
-            out[index + 1] = (sample.toInt() shr 8 and 0xFF).toByte()
-            index += 2
-        }
-        return out
     }
 
     companion object {

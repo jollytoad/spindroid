@@ -6,17 +6,26 @@ import com.sendspin.protocol.psk.ClientKeyStore
 import com.sendspin.protocol.session.AdmissionPolicy
 import com.sendspin.protocol.session.Activity
 import com.sendspin.protocol.session.SessionTransport
+import com.sendspin.protocol.session.SourceAudioFormat
 import com.sendspin.protocol.session.SourceSession
 import com.sendspin.protocol.session.SourceSessionConfiguration
 import com.sendspin.protocol.session.SourceSessionListener
 import com.sendspin.protocol.session.SourceSessionState
+import com.sendspin.sender.capture.AudioCapture
+import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.session.AndroidSessionClock
+import com.sendspin.sender.session.CapturePipeline
 import com.sendspin.sender.session.SourceClient
 import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 /**
  * The server that waits for the servers to connect.
@@ -29,6 +38,8 @@ class InboundServer(
     private val keys: ClientKeyStore,
     private val suite: NoiseSuite,
     private val port: Int,
+    private val format: SourceAudioFormat,
+    private val capture: AudioCapture,
     private val listener: Listener,
 ) {
     /** What the server tells the rest of the app. */
@@ -52,12 +63,42 @@ class InboundServer(
     }
 
     private val policy = AdmissionPolicy { keys.lastPlaybackServerId }
-    private val sessions = mutableMapOf<WebSocket, Connection>()
-    private var admitted: Connection? = null
-    private var server: WebSocketServer? = null
+    private val sessions = ConcurrentHashMap<WebSocket, Connection>()
+    @Volatile private var admitted: Connection? = null
+    @Volatile private var server: WebSocketServer? = null
 
-    /** Starts the server. */
-    fun start() {
+    /** Whether [stop] has started, so the bind callback does nothing. */
+    @Volatile private var stopping = false
+
+    /** The thread that polls the clock of the admitted session. */
+    private val scheduler: ScheduledExecutorService =
+        Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "sendspin-inbound").apply { isDaemon = true }
+        }
+
+    /** The task that polls the clock of the admitted session. */
+    private var pollTask: ScheduledFuture<*>? = null
+
+    /** Turns the captured blocks into the chunks the protocol carries. */
+    private val pipeline = CapturePipeline(
+        format = format,
+        onChunk = { pcm, timestamp -> admitted?.session?.onCapturedAudio(pcm, timestamp) },
+        onCaptureError = { message ->
+            CaptureStatusHolder.publishError(message)
+            listener.onError(message)
+        },
+        onMeasurements = { blocks, peak ->
+            CaptureStatusHolder.publishMeasurements(blocks, peak)
+        },
+    )
+
+    /**
+     * Starts the server and the capture.
+     *
+     * @param onStarted runs once the socket accepts connections, so the
+     *   caller can advertise the port only when it is listening
+     */
+    fun start(onStarted: () -> Unit = {}) {
         if (server != null) return
         val started = object : WebSocketServer(InetSocketAddress(port)) {
             override fun onOpen(socket: WebSocket, handshake: ClientHandshake) {
@@ -79,23 +120,51 @@ class InboundServer(
             }
 
             override fun onError(socket: WebSocket, exception: Exception) {
-                Log.w(TAG, "The connection failed", exception)
+                if (socket == null) {
+                    // The bind failed, so no server can connect.
+                    Log.e(TAG, "The server could not listen on the port $port", exception)
+                    listener.onError("The server could not listen on the port $port")
+                } else {
+                    Log.w(TAG, "The connection failed", exception)
+                }
             }
 
-            override fun onStart() = Unit
+            override fun onStart() {
+                // A stop may have run before the bind finished.
+                if (stopping || server == null) return
+                Log.i(TAG, "The server listens on the port $port")
+                // The capture and the clock polling start only now, because
+                // a bind that failed would leave both running for nothing.
+                capture.start(pipeline)
+                // The clock filter needs a regular measurement, so the
+                // admitted session is polled on a timer.
+                pollTask = scheduler.scheduleWithFixedDelay(
+                    { admitted?.session?.pollClock() },
+                    POLL_INTERVAL_MILLIS,
+                    POLL_INTERVAL_MILLIS,
+                    TimeUnit.MILLISECONDS,
+                )
+                onStarted()
+            }
         }
         started.setReuseAddr(true)
         server = started
         started.start()
     }
 
-    /** Stops the server, and closes every connection. */
+    /** Stops the server, the capture, and every connection. */
     fun stop() {
+        stopping = true
+        pollTask?.cancel(true)
+        pollTask = null
+        scheduler.shutdownNow()
+        capture.stop()
         server?.stop()
         server = null
         sessions.values.forEach { it.session.sendGoodbye("shutdown") }
         sessions.clear()
         admitted = null
+        pipeline.reset()
     }
 
     /** A server connected. */
@@ -110,12 +179,14 @@ class InboundServer(
                 }
 
                 override fun onClosed(reason: String) {
+                    Log.i(TAG, "The session closed: $reason")
                     onDisconnected(socket)
                 }
             },
             configuration = SourceSessionConfiguration(
                 clientName = SourceClient.DEVICE_NAME,
                 suite = suite,
+                format = format,
             ),
         )
         sessions[socket] = Connection(socket, session)
@@ -138,6 +209,7 @@ class InboundServer(
         }
         if (current == null) {
             admitted = incoming
+            pipeline.reset()
             listener.onStateChanged(state)
             return
         }
@@ -158,6 +230,7 @@ class InboundServer(
             return
         }
         admitted = incoming
+        pipeline.reset()
         current.session.sendGoodbye("another_server")
         listener.onStateChanged(state)
     }
@@ -167,6 +240,7 @@ class InboundServer(
         val connection = sessions.remove(socket) ?: return
         if (admitted === connection) {
             admitted = null
+            pipeline.reset()
             listener.onStateChanged(SourceSessionState())
         }
     }
@@ -192,5 +266,8 @@ class InboundServer(
 
     private companion object {
         const val TAG = "SendSpin"
+
+        /** How often the admitted session is polled for a clock exchange. */
+        const val POLL_INTERVAL_MILLIS = 100L
     }
 }
