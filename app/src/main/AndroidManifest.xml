@@ -21,17 +21,20 @@
         android:name="android.permission.ACCESS_LOCAL_NETWORK"
         tools:targetApi="36" />
 
+    <!-- The keys are bound to the device keystore, so a restored copy is
+         useless. Turn the backup off, so a restore never leaves the app with
+         keys that it cannot decrypt. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.SendSpin">
 
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:label="@string/app_name">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

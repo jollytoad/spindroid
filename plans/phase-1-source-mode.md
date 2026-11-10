@@ -11,20 +11,20 @@ extra work.
 
 ## Status
 
-The code is complete. Every task below is done, and the test suite has 174
+The code is complete. Every task below is done, and the test suite has 187
 tests. The tests run on the JVM without an emulator, and they cover the
 session, the pairing, the framing, the resampling, and the admission rules.
 
-What is **not** proven yet is the behaviour on a real phone. No device was
-attached to the build machine, so the capture, the foreground service, and
-the reconnect after a screen-off were never exercised on hardware. The exit
-criteria that need a device are therefore open:
+The app is installed on a real phone, and the pairing works there. The rest
+of the device behaviour is not proven yet. The capture, the foreground
+service, and the reconnect after a screen-off were not exercised on hardware.
+The exit criteria that need a device are therefore open:
 
 | Exit criterion | State |
 | --- | --- |
-| The app builds and installs on a physical device running Android 13 or later | The build succeeds. The install was not tried. |
-| Music Assistant shows the phone under Live Inputs after the user pastes the pairing token | Open. Needs a real Music Assistant server. |
-| The user can select the phone as an input in Music Assistant, and the audio plays on a speaker | Open. Needs a real server and a real capture. |
+| The app builds and installs on a physical device running Android 13 or later | Done. The app builds, installs, and runs on the test phone. |
+| Music Assistant shows the phone under Live Inputs after the user pastes the pairing token | Done. Music Assistant paired with the phone through `pairing_psk` on the test phone. |
+| The user can select the phone as an input in Music Assistant, and the audio plays on a speaker | Open. The client now answers the start command at once. The capture status panel shows whether the phone captures sound. It needs a retest on the phone. |
 | The clock error settles below 1 ms in the status panel | Proven against the test server. The filter settles at a few tens of microseconds over a local socket. |
 | The app survives a screen-off and a network drop. It reconnects on its own. | Open. The reconnect is written, but not run on a device. |
 | The app uses AES-GCM by default and falls back to ChaCha-Poly on a device without hardware AES | Written. The benchmark picks the suite, and the client offers the other one when the server refuses. |
@@ -41,8 +41,7 @@ criteria that need a device are therefore open:
 
 ### Notes on what the work found
 
-Six things were harder than they looked, and each one is now covered by a
-test.
+Several things were harder than they looked. Most are now covered by a test.
 
 1. **The framing layer adds the message type byte.** The session sends a
    JSON body without a type, and the fragmenter puts the type in front of
@@ -72,6 +71,26 @@ test.
 6. **The server may refuse the cipher suite.** The client measures the
    cipher on the device and picks the faster suite. When the server refuses
    it anyway, the client offers the other one, once.
+
+7. **A server name can contain a space.** The pairing store wrote its
+   records with spaces between the fields, so a name such as
+   `Music Assistant (studio)` made the long-term record unreadable. The
+   re-handshake after the pairing then failed, and Music Assistant dropped
+   the connection. The store now writes a versioned record with a base64url
+   name and key, and `PskRecordCodecTest` holds it there.
+
+8. **The accept-incoming path needs the same clock and capture loop as the
+   dial-out path.** The session reports itself available only after the
+   clock converges, and Music Assistant sends the start command after that.
+   Without the poll timer and the captured audio, the connection stayed up
+   but no audio moved.
+
+9. **The stream must not wait for the first audio.** The client opened the
+   stream with the first captured block. Music Assistant gives the source
+   about five seconds to answer the start command, and it reports "did not
+   start streaming" when the answer is late. A source that is silent, for
+   example because the phone plays nothing, never sent the answer. The
+   client now opens the stream at once, and the audio follows.
 
 ### The second implementation
 
@@ -119,10 +138,12 @@ package for it.
 6. Write the state reporting. Send `client/state` with `available` and the
    `source` object. Report `available: true` only after the filter converges.
 7. Write the source role:
-   - On `server/command` with `source.command` set to `start`, set a flag. The
-     stream opens with the next captured block.
-   - On the first captured block after the flag, send `client-stream/start`.
-     The format must be one of the codecs the server listed.
+   - On `server/command` with `source.command` set to `start`, open the
+     stream at once. The server waits only a few seconds for the answer.
+   - Send `client-stream/start` with the format of the stream. The format
+     must be one of the codecs the server listed.
+   - A start that arrives before the clock settles is kept. The stream opens
+     when the clock converges.
    - Send audio chunks. Keep each chunk between 5 ms and 150 ms.
    - On `server/command` with `source.command` set to `stop`, send
      `client-stream/end` if the stream is open.
