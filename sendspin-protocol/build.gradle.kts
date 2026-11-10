@@ -21,6 +21,9 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
+    // The interop test talks to a real server over a real socket. The
+    // library is plain Java, so it does not make the module an Android one.
+    testImplementation(libs.java.websocket)
 }
 
 tasks.withType<Test>().configureEach {
