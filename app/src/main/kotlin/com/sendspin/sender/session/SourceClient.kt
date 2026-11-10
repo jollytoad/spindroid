@@ -5,6 +5,7 @@ import com.sendspin.protocol.codec.PcmChunker
 import com.sendspin.protocol.codec.PcmResampler
 import com.sendspin.protocol.crypto.NoiseSuite
 import com.sendspin.protocol.psk.ClientKeyStore
+import com.sendspin.protocol.session.ReconnectPolicy
 import com.sendspin.protocol.session.SessionPhase
 import com.sendspin.protocol.session.SourceAudioFormat
 import com.sendspin.protocol.session.SourceSession
@@ -17,6 +18,7 @@ import com.sendspin.sender.capture.PcmBlock
 import com.sendspin.sender.net.WebSocketTransport
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 /**
@@ -54,11 +56,21 @@ class SourceClient(
     private var session: SourceSession? = null
     private var state: SourceSessionState = SourceSessionState()
 
+    /** The task that polls the clock of the running session. */
+    private var pollTask: ScheduledFuture<*>? = null
+
     @Volatile
     private var running = false
 
+    /**
+     * Whether a reconnect is already on its way.
+     *
+     * A socket that fails reports both a failure and a close, and the
+     * session reports the end of the session as well. Without this guard,
+     * one drop would open several connections.
+     */
     @Volatile
-    private var reconnectAttempt = 0
+    private var reconnectPending = false
 
     /** The state of the client. */
     val currentState: SourceSessionState get() = state
@@ -74,7 +86,10 @@ class SourceClient(
     fun stop() {
         if (!running) return
         running = false
+        reconnectPending = false
         scheduler.shutdownNow()
+        pollTask?.cancel(true)
+        pollTask = null
         session?.sendGoodbye("shutdown")
         transport?.release()
         transport = null
@@ -84,6 +99,12 @@ class SourceClient(
     /** Opens the connection to the server. */
     private fun connect() {
         if (!running) return
+        reconnectPending = false
+        // The old session and its socket go away, so a reconnect does not
+        // leave them behind.
+        pollTask?.cancel(true)
+        pollTask = null
+        transport?.release()
         val url = "ws://$serverAddress:$PORT/sendspin"
         val socket = WebSocketTransport(
             url = url,
@@ -109,7 +130,7 @@ class SourceClient(
         source.start()
         // The clock filter needs a regular measurement, so the session is
         // polled on a timer.
-        scheduler.scheduleWithFixedDelay(
+        pollTask = scheduler.scheduleWithFixedDelay(
             { source.pollClock() },
             POLL_INTERVAL_MILLIS,
             POLL_INTERVAL_MILLIS,
@@ -133,6 +154,7 @@ class SourceClient(
     /** Handles a connection that dropped. */
     private fun onConnectionLost(reason: String) {
         if (!running) return
+        if (reconnectPending) return
         Log.i(TAG, "The connection closed: $reason")
         state = state.copy(
             phase = SessionPhase.CLOSED,
@@ -152,6 +174,7 @@ class SourceClient(
                     NoiseSuite.AES_GCM_SHA256
                 }
                 Log.i(TAG, "The server refused the suite, trying ${currentSuite.protocolName}")
+                reconnectPending = true
                 scheduler.schedule({ connect() }, 0, TimeUnit.MILLISECONDS)
                 return
             }
@@ -167,19 +190,24 @@ class SourceClient(
      */
     private fun scheduleReconnect() {
         if (!running) return
-        reconnectAttempt += 1
-        val delay = minOf(
-            BASE_RECONNECT_DELAY_MILLIS * reconnectAttempt,
-            MAX_RECONNECT_DELAY_MILLIS,
-        )
+        reconnectPending = true
+        val delay = reconnect.nextDelayMillis()
         Log.i(TAG, "Reconnecting in ${delay}ms")
         scheduler.schedule({ connect() }, delay, TimeUnit.MILLISECONDS)
     }
+
+    /** The wait between two attempts to connect. */
+    private val reconnect = ReconnectPolicy()
 
     /** The session reports what it did. */
     private val sessionListener = object : SourceSessionListener {
         override fun onStateChanged(state: SourceSessionState) {
             this@SourceClient.state = state
+            // A session that reaches the ready state has a working
+            // connection, so the next drop starts the wait over.
+            if (state.phase == SessionPhase.READY || state.phase == SessionPhase.STREAMING) {
+                reconnect.reset()
+            }
             listener.onStateChanged(state)
         }
 
@@ -252,7 +280,5 @@ class SourceClient(
         val FORMAT = SourceAudioFormat(codec = "pcm", sampleRate = 48000, channels = 2, bitDepth = 16)
 
         private const val POLL_INTERVAL_MILLIS = 100L
-        private const val BASE_RECONNECT_DELAY_MILLIS = 1000L
-        private const val MAX_RECONNECT_DELAY_MILLIS = 30000L
     }
 }
