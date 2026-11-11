@@ -59,6 +59,7 @@ android {
 
 dependencies {
     implementation(project(":sendspin-protocol"))
+    implementation(project(":music-assistant-client"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

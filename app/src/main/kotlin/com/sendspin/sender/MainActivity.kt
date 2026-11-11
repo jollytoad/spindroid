@@ -16,13 +16,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.sendspin.protocol.crypto.X25519
 import com.sendspin.protocol.pairing.PairingToken
 import com.sendspin.sender.capture.CaptureStatusHolder
+import com.sendspin.sender.mass.MassAccountManager
+import com.sendspin.sender.mass.MassDiscovery
 import com.sendspin.sender.service.SendSpinService
 import com.sendspin.sender.session.SessionStateHolder
 import com.sendspin.sender.storage.EncryptedKeyStore
 import com.sendspin.sender.ui.MainScreen
+import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
@@ -34,6 +38,8 @@ import java.util.Date
  */
 class MainActivity : ComponentActivity() {
     private lateinit var keys: EncryptedKeyStore
+    private lateinit var accounts: MassAccountManager
+    private lateinit var discovery: MassDiscovery
 
     /** The message the app shows under the fields. */
     private var message by mutableStateOf<String?>(null)
@@ -93,11 +99,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         keys = EncryptedKeyStore(this)
+        accounts = MassAccountManager(this)
+        discovery = MassDiscovery(this)
 
         setContent {
             val state by SessionStateHolder.state.collectAsStateWithLifecycle()
             val serviceRuns by SessionStateHolder.running.collectAsStateWithLifecycle()
             val captureStatus by CaptureStatusHolder.state.collectAsStateWithLifecycle()
+            val account by accounts.state.collectAsStateWithLifecycle()
             MainScreen(
                 pairingToken = pairingToken(),
                 state = state,
@@ -105,11 +114,34 @@ class MainActivity : ComponentActivity() {
                 buildLabel = buildLabel(),
                 running = serviceRuns,
                 message = message,
+                account = account,
                 onConnect = { connect() },
                 onDisconnect = { disconnect() },
                 onCopyToken = { copyToken() },
+                onSignIn = { serverUrl, username, password ->
+                    accounts.signIn(serverUrl, username, password)
+                },
+                onSignOut = { accounts.signOut() },
+                onServerUrlChange = { serverUrl ->
+                    accounts.setServerUrl(serverUrl, edited = true)
+                },
             )
         }
+
+        // The address of the server is found over the network, so the search
+        // runs on its own thread.
+        lifecycleScope.launch {
+            discovery.discover(
+                onFound = { serverUrl -> accounts.setServerUrl(serverUrl, edited = false) },
+                onFailed = { reason -> message = reason },
+            )
+        }
+    }
+
+    override fun onDestroy() {
+        discovery.stop()
+        accounts.close()
+        super.onDestroy()
     }
 
     /**

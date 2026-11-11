@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Music Assistant serves its web interface over plain HTTP on the local
+    network, and the address of the server is found over mDNS, so it is not
+    known when the app is built. Android blocks plain HTTP by default, and
+    the app cannot talk to the server without it.
+
+    The app only ever talks to a server on the local network that the user
+    chose, so the rule is turned on for the app as a whole rather than for
+    a list of addresses that cannot be written down ahead of time.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

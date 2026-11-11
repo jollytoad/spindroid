@@ -20,6 +20,17 @@
     <string name="action_show_token">Show the pairing token</string>
     <string name="action_hide_token">Hide the pairing token</string>
 
+    <!-- The Music Assistant account. -->
+    <string name="title_account">Music Assistant account</string>
+    <string name="account_explanation">Sign in to Music Assistant. The account lets the phone ask the server which players it can send audio to.</string>
+    <string name="account_signed_in">Signed in as %1$s.</string>
+    <string name="label_account_server">Server</string>
+    <string name="label_account_username">User name</string>
+    <string name="label_account_password">Password</string>
+    <string name="action_sign_in">Sign in</string>
+    <string name="action_signing_in">Signing in…</string>
+    <string name="action_sign_out">Sign out</string>
+
     <!-- The status panel. -->
     <string name="title_status">Status</string>
     <string name="label_connection">Connection</string>

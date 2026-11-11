@@ -49,7 +49,9 @@ public class MusicAssistantClient(
         val answer = try {
             post(body)
         } catch (exception: IOException) {
-            return LoginResult.Failure("The server at $baseUrl did not answer")
+            // The reason matters. A phone that cannot reach the server and a
+            // phone that was refused by it need a different answer.
+            return LoginResult.Failure("The server at $baseUrl did not answer: ${exception.message}")
         }
         val response = try {
             responseAdapter.fromJson(answer)
