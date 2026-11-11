@@ -18,3 +18,4 @@ rootProject.name = "sendspin-sender"
 
 include(":app")
 include(":sendspin-protocol")
+include(":music-assistant-client")
