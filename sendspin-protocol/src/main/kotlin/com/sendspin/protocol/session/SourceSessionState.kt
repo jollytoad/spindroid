@@ -97,4 +97,31 @@ public interface SourceSessionListener {
 
     /** The client stopped sending audio. */
     public fun onStreamClosed() {}
+
+    /**
+     * A chunk of audio went to the server.
+     *
+     * The callback carries the local time of the first sample and the time
+     * the server will play it, so a caller can record what the server
+     * receives. A chunk that the session drops never reaches this callback.
+     */
+    public fun onAudioChunk(
+        pcm: ByteArray,
+        captureTimestampMicros: Long,
+        serverTimestampMicros: Long,
+    ) {
+    }
+
+    /**
+     * A chunk of audio did not reach the server.
+     *
+     * The reason says why it was dropped, and the age says how long it
+     * waited before it was dropped.
+     */
+    public fun onAudioChunkDropped(
+        captureTimestampMicros: Long,
+        ageMicros: Long,
+        reason: String,
+    ) {
+    }
 }

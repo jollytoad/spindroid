@@ -12,6 +12,7 @@ import com.sendspin.protocol.session.SourceSessionConfiguration
 import com.sendspin.protocol.session.SourceSessionListener
 import com.sendspin.protocol.session.SourceSessionState
 import com.sendspin.sender.capture.AudioCapture
+import com.sendspin.sender.capture.CaptureDebugRecorder
 import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.session.AndroidSessionClock
 import com.sendspin.sender.session.CapturePipeline
@@ -40,6 +41,7 @@ class InboundServer(
     private val format: SourceAudioFormat,
     private val capture: AudioCapture,
     private val listener: Listener,
+    private val recorder: CaptureDebugRecorder? = null,
 ) {
     /** What the server tells the rest of the app. */
     interface Listener {
@@ -81,7 +83,14 @@ class InboundServer(
     /** Turns the captured blocks into the chunks the protocol carries. */
     private val pipeline = CapturePipeline(
         format = format,
-        onChunk = { pcm, timestamp -> admitted?.session?.onCapturedAudio(pcm, timestamp) },
+        onChunk = { pcm, timestamp ->
+            val started = System.nanoTime()
+            admitted?.session?.onCapturedAudio(pcm, timestamp)
+            val elapsed = (System.nanoTime() - started) / 1000
+            if (elapsed > SLOW_SEND_MICROS) {
+                Log.w(TAG, "The chunk took $elapsed microseconds to send")
+            }
+        },
         onCaptureError = { message ->
             CaptureStatusHolder.publishError(message)
             listener.onError(message)
@@ -134,6 +143,7 @@ class InboundServer(
                 Log.i(TAG, "The server listens on the port $port")
                 // The capture and the clock polling start only now, because
                 // a bind that failed would leave both running for nothing.
+                recorder?.start()
                 capture.start(pipeline)
                 // The clock filter needs a regular measurement, so the
                 // admitted session is polled on a timer.
@@ -158,6 +168,7 @@ class InboundServer(
         pollTask = null
         scheduler.shutdownNow()
         capture.stop()
+        recorder?.stop()
         server?.stop()
         server = null
         sessions.values.forEach { it.session.sendGoodbye("shutdown") }
@@ -180,6 +191,29 @@ class InboundServer(
                 override fun onClosed(reason: String) {
                     Log.i(TAG, "The session closed: $reason")
                     onDisconnected(socket)
+                }
+
+                override fun onAudioChunk(
+                    pcm: ByteArray,
+                    captureTimestampMicros: Long,
+                    serverTimestampMicros: Long,
+                ) {
+                    // The hand-over time is stamped here, because the dump
+                    // needs a clock that runs beside the audio.
+                    recorder?.record(
+                        pcm,
+                        captureTimestampMicros,
+                        serverTimestampMicros,
+                        System.nanoTime() / 1000,
+                    )
+                }
+
+                override fun onAudioChunkDropped(
+                    captureTimestampMicros: Long,
+                    ageMicros: Long,
+                    reason: String,
+                ) {
+                    Log.w(TAG, "A chunk was dropped: the reason is $reason, the age is $ageMicros")
                 }
             },
             configuration = SourceSessionConfiguration(
@@ -268,6 +302,9 @@ class InboundServer(
 
         /** How often the admitted session is polled for a clock exchange. */
         private const val POLL_INTERVAL_MILLIS = 100L
+
+        /** A send that takes longer than this is worth a word in the log. */
+        private const val SLOW_SEND_MICROS = 5_000L
 
         /** The name the client shows to the server. */
         const val DEVICE_NAME = "SendSpin"

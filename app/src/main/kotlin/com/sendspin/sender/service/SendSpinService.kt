@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import com.sendspin.sender.MainActivity
 import com.sendspin.sender.R
 import com.sendspin.sender.capture.AudioCapture
+import com.sendspin.sender.capture.CaptureDebugRecorder
 import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.capture.SystemAudioCapture
 import com.sendspin.sender.discovery.ServiceAdvertiser
@@ -113,12 +114,14 @@ class SendSpinService : Service() {
         CaptureStatusHolder.publishError(null)
 
         // The app waits for the server to dial it, so it advertises itself.
+        val recorder = CaptureDebugRecorder(filesDir, InboundServer.FORMAT)
         val inbound = InboundServer(
             keys = keys,
             suite = settings.cipherSuite,
             port = ServiceAdvertiser.PORT,
             format = InboundServer.FORMAT,
             capture = captureSource,
+            recorder = recorder,
             listener = object : InboundServer.Listener {
                 override fun onStateChanged(state: com.sendspin.protocol.session.SourceSessionState) {
                     SessionStateHolder.publish(state)
