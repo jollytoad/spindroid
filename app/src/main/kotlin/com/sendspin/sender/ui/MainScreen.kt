@@ -13,11 +13,17 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.sendspin.protocol.pairing.PairingCode
 import com.sendspin.protocol.session.SessionPhase
 import com.sendspin.protocol.session.SourceSessionState
 import com.sendspin.sender.R
@@ -55,7 +61,12 @@ fun MainScreen(
 
         StartSection(running = running, onConnect = onConnect, onDisconnect = onDisconnect)
 
-        PairingSection(pairingToken = pairingToken, onCopyToken = onCopyToken)
+        PairingSection(
+            pairingToken = pairingToken,
+            pairingCode = state.pairingCode,
+            serverConnected = state.serverName != null,
+            onCopyToken = onCopyToken,
+        )
 
         StatusSection(state = state, captureStatus = captureStatus, buildLabel = buildLabel)
 
@@ -98,9 +109,17 @@ private fun StartSection(
     }
 }
 
-/** The token that pairs the phone with a server. */
+/** The token that pairs the phone with a server, and the code that does it faster. */
 @Composable
-private fun PairingSection(pairingToken: String, onCopyToken: () -> Unit) {
+private fun PairingSection(
+    pairingToken: String,
+    pairingCode: String?,
+    serverConnected: Boolean,
+    onCopyToken: () -> Unit,
+) {
+    // The token is shown when the user asks for it, and also while no
+    // server has called in, because then it is the only way to pair.
+    var tokenVisible by remember { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -110,24 +129,49 @@ private fun PairingSection(pairingToken: String, onCopyToken: () -> Unit) {
                 text = stringResource(R.string.title_pairing),
                 style = MaterialTheme.typography.titleMedium,
             )
-            Text(
-                text = stringResource(R.string.pairing_explanation),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            if (pairingCode != null) {
+                Text(
+                    text = stringResource(R.string.pairing_code_instruction),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = PairingCode.group(pairingCode),
+                    style = MaterialTheme.typography.displayMedium.copy(fontFamily = FontFamily.Monospace),
+                )
+            } else if (serverConnected) {
+                Text(
+                    text = stringResource(R.string.pairing_code_where),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.pairing_explanation),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
             Text(
                 text = stringResource(R.string.pairing_where),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Text(
-                text = stringResource(R.string.label_pairing_token),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                text = pairingToken,
-                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-            )
-            OutlinedButton(onClick = onCopyToken) {
-                Text(stringResource(R.string.action_copy_token))
+            TextButton(onClick = { tokenVisible = !tokenVisible }) {
+                Text(
+                    stringResource(
+                        if (tokenVisible) R.string.action_hide_token else R.string.action_show_token,
+                    ),
+                )
+            }
+            if (tokenVisible || !serverConnected) {
+                Text(
+                    text = stringResource(R.string.label_pairing_token),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = pairingToken,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                )
+                OutlinedButton(onClick = onCopyToken) {
+                    Text(stringResource(R.string.action_copy_token))
+                }
             }
         }
     }
