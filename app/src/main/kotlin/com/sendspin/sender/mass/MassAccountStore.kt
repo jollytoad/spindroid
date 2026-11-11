@@ -46,10 +46,22 @@ class MassAccountStore(
         set(value) = preferences.edit { putString(KEY_DISPLAY_NAME, value) }
 
     /**
+     * The address of the server.
+     *
+     * The address is not a secret. It is kept, so the app still knows where
+     * the server is after a restart, before the search finds it again.
+     */
+    var serverUrl: String?
+        get() = preferences.getString(KEY_SERVER_URL, null)
+        set(value) = preferences.edit { putString(KEY_SERVER_URL, value) }
+
+    /**
      * Forgets the account.
      *
      * The token goes, because the account may have been signed out on the
-     * server, and a token that no longer works only fails later.
+     * server, and a token that no longer works only fails later. The
+     * address of the server stays, because it does not belong to the
+     * account.
      */
     fun clear() {
         preferences.edit {
@@ -64,5 +76,6 @@ class MassAccountStore(
         const val KEY_TOKEN = "mass_token"
         const val KEY_USERNAME = "mass_username"
         const val KEY_DISPLAY_NAME = "mass_display_name"
+        const val KEY_SERVER_URL = "mass_server_url"
     }
 }

@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -22,6 +23,7 @@ import com.sendspin.protocol.pairing.PairingToken
 import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.mass.MassAccountManager
 import com.sendspin.sender.mass.MassDiscovery
+import com.sendspin.sender.mass.MassPlayerManager
 import com.sendspin.sender.service.SendSpinService
 import com.sendspin.sender.session.SessionStateHolder
 import com.sendspin.sender.storage.EncryptedKeyStore
@@ -40,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var keys: EncryptedKeyStore
     private lateinit var accounts: MassAccountManager
     private lateinit var discovery: MassDiscovery
+    private lateinit var players: MassPlayerManager
 
     /** The message the app shows under the fields. */
     private var message by mutableStateOf<String?>(null)
@@ -101,12 +104,23 @@ class MainActivity : ComponentActivity() {
         keys = EncryptedKeyStore(this)
         accounts = MassAccountManager(this)
         discovery = MassDiscovery(this)
+        players = MassPlayerManager(this, accounts)
 
         setContent {
             val state by SessionStateHolder.state.collectAsStateWithLifecycle()
             val serviceRuns by SessionStateHolder.running.collectAsStateWithLifecycle()
             val captureStatus by CaptureStatusHolder.state.collectAsStateWithLifecycle()
             val account by accounts.state.collectAsStateWithLifecycle()
+            val playerList by players.state.collectAsStateWithLifecycle()
+
+            // The list of players comes from the server, so it is read once
+            // the account is signed in. It is read again when the phone is
+            // paired, because the server only lists the phone while it is
+            // connected.
+            LaunchedEffect(account.signedIn, state.paired) {
+                if (account.signedIn) players.refresh()
+            }
+
             MainScreen(
                 pairingToken = pairingToken(),
                 state = state,
@@ -115,6 +129,9 @@ class MainActivity : ComponentActivity() {
                 running = serviceRuns,
                 message = message,
                 account = account,
+                players = playerList,
+                sourceUri = players.sourceUri,
+                clientId = players.clientId,
                 onConnect = { connect() },
                 onDisconnect = { disconnect() },
                 onCopyToken = { copyToken() },
@@ -125,6 +142,8 @@ class MainActivity : ComponentActivity() {
                 onServerUrlChange = { serverUrl ->
                     accounts.setServerUrl(serverUrl, edited = true)
                 },
+                onRefreshPlayers = { players.refresh() },
+                onChoosePlayer = { playerId -> players.choose(playerId) },
             )
         }
 
@@ -140,6 +159,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         discovery.stop()
+        players.close()
         accounts.close()
         super.onDestroy()
     }

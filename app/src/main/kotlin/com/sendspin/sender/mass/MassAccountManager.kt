@@ -32,6 +32,14 @@ class MassAccountManager(
     val state: StateFlow<MassAccountState> = mutableState.asStateFlow()
 
     /**
+     * The token of the signed in account.
+     *
+     * It is null when no account is signed in. The commands that come after
+     * the sign in authenticate with it.
+     */
+    val token: String? get() = store.token
+
+    /**
      * Signs in to the server.
      *
      * @param serverUrl the base address of the server
@@ -86,10 +94,12 @@ class MassAccountManager(
         if (serverUrl.isBlank()) return
         if (edited) {
             publish(mutableState.value.copy(serverUrl = serverUrl))
+            store.serverUrl = serverUrl
             return
         }
         if (mutableState.value.serverUrl.isBlank()) {
             publish(mutableState.value.copy(serverUrl = serverUrl))
+            store.serverUrl = serverUrl
         }
     }
 
@@ -100,6 +110,7 @@ class MassAccountManager(
 
     /** The state the stored account gives. */
     private fun readState(): MassAccountState = MassAccountState(
+        serverUrl = store.serverUrl.orEmpty(),
         username = store.username,
         displayName = store.displayName,
     )

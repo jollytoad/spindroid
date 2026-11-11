@@ -1,5 +1,6 @@
 package com.sendspin.sender.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -20,17 +22,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.sendspin.mass.MassPlayer
 import com.sendspin.protocol.pairing.PairingCode
 import com.sendspin.protocol.session.SessionPhase
 import com.sendspin.protocol.session.SourceSessionState
 import com.sendspin.sender.R
 import com.sendspin.sender.capture.CaptureStatus
 import com.sendspin.sender.mass.MassAccountState
+import com.sendspin.sender.mass.MassPlayerState
 
 /**
  * The screen of the app.
@@ -47,12 +52,17 @@ fun MainScreen(
     running: Boolean,
     message: String?,
     account: MassAccountState,
+    players: MassPlayerState,
+    sourceUri: String,
+    clientId: String,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onCopyToken: () -> Unit,
     onSignIn: (serverUrl: String, username: String, password: String) -> Unit,
     onSignOut: () -> Unit,
     onServerUrlChange: (String) -> Unit,
+    onRefreshPlayers: () -> Unit,
+    onChoosePlayer: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -81,6 +91,16 @@ fun MainScreen(
             onSignIn = onSignIn,
             onSignOut = onSignOut,
             onServerUrlChange = onServerUrlChange,
+        )
+
+        PlayerPickerSection(
+            state = players,
+            sourceUri = sourceUri,
+            clientId = clientId,
+            signedIn = account.signedIn,
+            live = state.paired,
+            onRefresh = onRefreshPlayers,
+            onChoose = onChoosePlayer,
         )
 
         StatusSection(state = state, captureStatus = captureStatus, buildLabel = buildLabel)
@@ -280,6 +300,126 @@ private fun AccountSection(
             }
         }
     }
+}
+
+/**
+ * The choice of the player that plays the phone.
+ *
+ * The phone cannot make sound itself. The server decides where the sound
+ * goes, so the list comes from the server, and the choice is told to the
+ * server.
+ */
+@Composable
+private fun PlayerPickerSection(
+    state: MassPlayerState,
+    sourceUri: String,
+    clientId: String,
+    signedIn: Boolean,
+    live: Boolean,
+    onRefresh: () -> Unit,
+    onChoose: (String) -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.title_players),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            if (!signedIn) {
+                Text(
+                    text = stringResource(R.string.players_sign_in_first),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.players_explanation),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (!live) {
+                    Text(
+                        text = stringResource(R.string.players_not_live),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                when {
+                    state.loading && state.players.isEmpty() -> Text(
+                        text = stringResource(R.string.players_loading),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+
+                    state.players.isEmpty() -> Text(
+                        text = stringResource(R.string.players_none),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+
+                    else -> state.players.forEach { player ->
+                        PlayerRow(
+                            player = player,
+                            names = state.allPlayers.associate { it.playerId to it.label },
+                            selected = player.activeSource == sourceUri ||
+                                player.activeSource == clientId,
+                            busy = state.choosing == player.playerId,
+                            usable = live,
+                            onChoose = { onChoose(player.playerId) },
+                        )
+                    }
+                }
+                state.error?.let { error ->
+                    Text(text = error, style = MaterialTheme.typography.bodyMedium)
+                }
+                OutlinedButton(onClick = onRefresh, enabled = !state.loading) {
+                    Text(stringResource(R.string.action_refresh))
+                }
+            }
+        }
+    }
+}
+
+/** One player in the list. */
+@Composable
+private fun PlayerRow(
+    player: MassPlayer,
+    names: Map<String, String>,
+    selected: Boolean,
+    busy: Boolean,
+    usable: Boolean,
+    onChoose: () -> Unit,
+) {
+    val canChoose = usable && player.available && !busy
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = canChoose, onClick = onChoose),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RadioButton(selected = selected, onClick = onChoose, enabled = canChoose)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = player.label, style = MaterialTheme.typography.bodyLarge)
+            noteOf(player, names)?.let { note ->
+                Text(text = note, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+/**
+ * The line under the name of a player.
+ *
+ * A group holds other players, and the line names them. A player that
+ * cannot be reached says so.
+ */
+@Composable
+private fun noteOf(player: MassPlayer, names: Map<String, String>): String? {
+    if (!player.available) return stringResource(R.string.players_not_available)
+    if (player.isGroup) {
+        val members = player.groupMembers.mapNotNull { names[it] }
+        if (members.isNotEmpty()) return members.joinToString(", ")
+    }
+    return player.provider
 }
 
 /** What the connection is doing. */

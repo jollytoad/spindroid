@@ -31,6 +31,16 @@
     <string name="action_signing_in">Signing in…</string>
     <string name="action_sign_out">Sign out</string>
 
+    <!-- The choice of the player that plays the phone. -->
+    <string name="title_players">Play on</string>
+    <string name="players_explanation">Choose the speaker that the sound of the phone goes to.</string>
+    <string name="players_sign_in_first">Sign in to Music Assistant first.</string>
+    <string name="players_loading">Reading the players from the server…</string>
+    <string name="players_none">The server has no player that can play sound.</string>
+    <string name="players_not_available">Not available</string>
+    <string name="players_not_live">The phone is not connected to the server, so it has no sound to send yet. Connect it first.</string>
+    <string name="action_refresh">Refresh</string>
+
     <!-- The status panel. -->
     <string name="title_status">Status</string>
     <string name="label_connection">Connection</string>
