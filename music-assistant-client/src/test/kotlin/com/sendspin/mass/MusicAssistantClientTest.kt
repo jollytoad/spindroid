@@ -1,5 +1,7 @@
 package com.sendspin.mass
 
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import com.sun.net.httpserver.HttpServer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -26,11 +28,19 @@ class MusicAssistantClientTest {
     /** The path the server was asked for. */
     private var receivedPath: String = ""
 
-    /** The answer the server gives. */
-    private var answer: String = ""
+    /** The header the server was given. */
+    private var receivedAuthorization: String? = null
 
-    /** The status the server answers with. */
-    private var status: Int = 200
+    /** The answer the server gives, per command. */
+    private val answers = mutableMapOf<String, Answer>()
+
+    /** The answer the server gives when the command is not in the map. */
+    private var fallback: Answer = Answer(200, "null")
+
+    /** One answer of the server. */
+    private data class Answer(val status: Int, val body: String)
+
+    private val moshi = Moshi.Builder().build()
 
     @BeforeEach
     fun startServer() {
@@ -39,8 +49,10 @@ class MusicAssistantClientTest {
         server.createContext("/api") { exchange ->
             receivedPath = exchange.requestURI.path
             receivedBody = exchange.requestBody.readBytes().toString(Charsets.UTF_8)
-            val bytes = answer.toByteArray(Charsets.UTF_8)
-            exchange.sendResponseHeaders(status, bytes.size.toLong())
+            receivedAuthorization = exchange.requestHeaders.getFirst("Authorization")
+            val answer = answers[commandOf(receivedBody)] ?: fallback
+            val bytes = answer.body.toByteArray(Charsets.UTF_8)
+            exchange.sendResponseHeaders(answer.status, bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
         }
         server.start()
@@ -52,11 +64,25 @@ class MusicAssistantClientTest {
         server.stop(0)
     }
 
+    /**
+     * The name of the command in a body.
+     *
+     * The body is read by the server, so the test reads it the same way.
+     */
+    private fun commandOf(body: String): String? {
+        val type = Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java)
+        val map = moshi.adapter<Map<String, Any>>(type).fromJson(body) ?: return null
+        return map["command"] as? String
+    }
+
     @Test
     fun `the sign in succeeds`() {
-        answer = """
+        answers[MusicAssistantClient.COMMAND_LOGIN] = Answer(
+            200,
+            """
             {"success":true,"access_token":"a-token","user":{"username":"sam","display_name":"Sam","role":"admin"}}
-        """.trimIndent()
+            """.trimIndent(),
+        )
 
         val result = MusicAssistantClient(baseUrl).login("sam", "hunter2", "SendSpin")
 
@@ -69,7 +95,10 @@ class MusicAssistantClientTest {
 
     @Test
     fun `the command carries the name and the password`() {
-        answer = """{"success":true,"access_token":"a-token","user":{"username":"sam"}}"""
+        answers[MusicAssistantClient.COMMAND_LOGIN] = Answer(
+            200,
+            """{"success":true,"access_token":"a-token","user":{"username":"sam"}}""",
+        )
 
         MusicAssistantClient(baseUrl).login("sam", "hunter2", "SendSpin")
 
@@ -82,7 +111,8 @@ class MusicAssistantClientTest {
 
     @Test
     fun `the wrong password gives the reason of the server`() {
-        answer = """{"success":false,"error":"Invalid username or password"}"""
+        answers[MusicAssistantClient.COMMAND_LOGIN] =
+            Answer(200, """{"success":false,"error":"Invalid username or password"}""")
 
         val result = MusicAssistantClient(baseUrl).login("sam", "wrong", "SendSpin")
 
@@ -99,7 +129,7 @@ class MusicAssistantClientTest {
 
     @Test
     fun `an answer that is not JSON gives a failure`() {
-        answer = "<html>not the API</html>"
+        answers[MusicAssistantClient.COMMAND_LOGIN] = Answer(200, "<html>not the API</html>")
 
         val result = MusicAssistantClient(baseUrl).login("sam", "hunter2", "SendSpin")
 
@@ -108,12 +138,115 @@ class MusicAssistantClientTest {
 
     @Test
     fun `an error status with a body gives the reason of the server`() {
-        status = 401
-        answer = """{"success":false,"error":"Invalid username or password"}"""
+        answers[MusicAssistantClient.COMMAND_LOGIN] =
+            Answer(401, """{"success":false,"error":"Invalid username or password"}""")
 
         val result = MusicAssistantClient(baseUrl).login("sam", "wrong", "SendSpin")
 
         assertTrue(result is LoginResult.Failure, "the sign in should fail, it gave $result")
-        assertEquals("Invalid username or password", (result as LoginResult.Failure).reason)
+        val reason = (result as LoginResult.Failure).reason
+        assertTrue(
+            reason.endsWith("Invalid username or password"),
+            "the reason should carry the words of the server, it was $reason",
+        )
+    }
+
+    @Test
+    fun `the list of players is read`() {
+        answers[MusicAssistantClient.COMMAND_PLAYERS_ALL] = Answer(
+            200,
+            """
+            [
+              {"player_id":"garage","name":"Garage","display_name":"Garage","type":"player",
+               "provider":"chromecast","available":true,"enabled":true,"state":"idle",
+               "active_source":"garage","group_members":[],"synced_to":null},
+              {"player_id":"radio","name":"radio","display_name":"radio","type":"player",
+               "provider":"squeezelite","available":false,"enabled":true,"state":"playing",
+               "active_source":"sendspin_source://audio_source/abc","group_members":["kitchen"],
+               "synced_to":null}
+            ]
+            """.trimIndent(),
+        )
+
+        val result = MusicAssistantClient(baseUrl).listPlayers("a-token")
+
+        assertTrue(result is PlayersResult.Success, "the list should arrive, it gave $result")
+        val players = (result as PlayersResult.Success).players
+        assertEquals(2, players.size)
+        assertEquals("garage", players[0].playerId)
+        assertEquals("Garage", players[0].label)
+        assertEquals("chromecast", players[0].provider)
+        assertTrue(players[0].playsAudio)
+        assertTrue(!players[0].isGroup)
+        assertEquals("sendspin_source://audio_source/abc", players[1].activeSource)
+        assertEquals(listOf("kitchen"), players[1].groupMembers)
+        assertEquals("playing", players[1].state)
+        assertEquals(false, players[1].available)
+    }
+
+    @Test
+    fun `the list of players carries the token`() {
+        answers[MusicAssistantClient.COMMAND_PLAYERS_ALL] = Answer(200, "[]")
+
+        MusicAssistantClient(baseUrl).listPlayers("a-token")
+
+        assertEquals("Bearer a-token", receivedAuthorization)
+        assertTrue(receivedBody.contains("\"command\":\"players/all\""), "the body was $receivedBody")
+    }
+
+    @Test
+    fun `a list of players that is not JSON gives a failure`() {
+        answers[MusicAssistantClient.COMMAND_PLAYERS_ALL] = Answer(200, "<html>not the API</html>")
+
+        val result = MusicAssistantClient(baseUrl).listPlayers("a-token")
+
+        assertTrue(result is PlayersResult.Failure, "the list should fail, it gave $result")
+    }
+
+    @Test
+    fun `a refused list of players gives the reason of the server`() {
+        answers[MusicAssistantClient.COMMAND_PLAYERS_ALL] = Answer(401, "Authentication required")
+
+        val result = MusicAssistantClient(baseUrl).listPlayers("a-token")
+
+        assertTrue(result is PlayersResult.Failure, "the list should fail, it gave $result")
+        assertEquals(
+            "The server did not answer: Authentication required",
+            (result as PlayersResult.Failure).reason,
+        )
+    }
+
+    @Test
+    fun `the choice of a player names the player and the source`() {
+        answers[MusicAssistantClient.COMMAND_SELECT_SOURCE] = Answer(200, "null")
+
+        val result = MusicAssistantClient(baseUrl)
+            .selectSource("a-token", "garage", "sendspin_source://audio_source/abc")
+
+        assertTrue(result is SelectSourceResult.Success, "the choice should work, it gave $result")
+        assertEquals("Bearer a-token", receivedAuthorization)
+        assertTrue(
+            receivedBody.contains("\"command\":\"players/cmd/select_source\""),
+            "the body was $receivedBody",
+        )
+        assertTrue(receivedBody.contains("\"player_id\":\"garage\""), "the body was $receivedBody")
+        assertTrue(
+            receivedBody.contains("\"source\":\"sendspin_source://audio_source/abc\""),
+            "the body was $receivedBody",
+        )
+    }
+
+    @Test
+    fun `a refused choice of a player gives the reason of the server`() {
+        answers[MusicAssistantClient.COMMAND_SELECT_SOURCE] = Answer(404, "Player garage is not available")
+
+        val result = MusicAssistantClient(baseUrl)
+            .selectSource("a-token", "garage", "sendspin_source://audio_source/abc")
+
+        assertTrue(result is SelectSourceResult.Failure, "the choice should fail, it gave $result")
+        assertEquals(
+            "The server did not answer: Player garage is not available",
+            (result as SelectSourceResult.Failure).reason,
+        )
     }
 }
