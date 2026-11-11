@@ -65,6 +65,7 @@ fun MainScreen(
             pairingToken = pairingToken,
             pairingCode = state.pairingCode,
             serverConnected = state.serverName != null,
+            paired = state.paired,
             onCopyToken = onCopyToken,
         )
 
@@ -115,6 +116,7 @@ private fun PairingSection(
     pairingToken: String,
     pairingCode: String?,
     serverConnected: Boolean,
+    paired: Boolean,
     onCopyToken: () -> Unit,
 ) {
     // The token is shown when the user asks for it, and also while no
@@ -138,6 +140,11 @@ private fun PairingSection(
                     text = PairingCode.group(pairingCode),
                     style = MaterialTheme.typography.displayMedium.copy(fontFamily = FontFamily.Monospace),
                 )
+            } else if (paired) {
+                Text(
+                    text = stringResource(R.string.pairing_done),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             } else if (serverConnected) {
                 Text(
                     text = stringResource(R.string.pairing_code_where),
@@ -149,10 +156,6 @@ private fun PairingSection(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            Text(
-                text = stringResource(R.string.pairing_where),
-                style = MaterialTheme.typography.bodyMedium,
-            )
             TextButton(onClick = { tokenVisible = !tokenVisible }) {
                 Text(
                     stringResource(
