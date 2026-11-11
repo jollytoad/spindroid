@@ -154,6 +154,38 @@ Several things were harder than they looked. Most are now covered by a test.
     had approved the phone. The status panel now follows the roles, and the
     line about approval is gone.
 
+16. **A client that admits no unpaired access has to refuse an activation
+    that asks for more.** The client used to take any activation the server
+    sent, and it sent the captured audio whenever the server named the
+    source role. So a server on the local network could open a connection
+    with the Sentinel key, name the source role, ask for the audio, and take
+    it. The client said that it admits no unpaired access, and then it did
+    not mean it. The specification says what a server may declare: a
+    long-term key allows the `playback` activity and nothing else, and the
+    Sentinel key and the pairing key allow it only when the client admits
+    unpaired access. A server that asks for more gets a goodbye, and the
+    reason says whether the answer is a pairing or a refusal.
+
+17. **The own test server was not conformant either.** It activated the
+    source role on a connection that the pairing key opened, which rule 16
+    now refuses. It pairs first, runs a new handshake onto the paired key,
+    and then asks for the audio. The interop test still passes, and now it
+    proves the same flow that Music Assistant runs.
+
+18. **The code cannot be shown before the server starts the pairing.** The
+    code comes from the handshake hash and from both sides' nonces, so the
+    client needs the server's nonce before it has anything to show. The
+    operator has to go to the server first and start the pairing there. The
+    screen says so, and names the steps, because a screen that waits in
+    silence looks broken.
+
+19. **The specification has a better pairing method than the token.** The
+    token carries the client's public key and the pairing key, so it is a
+    hundred and eight characters. The dynamic pairing code is six digits,
+    and Music Assistant offers it as soon as the client says that it can
+    show one. Music Assistant has no scanner, so the code has to be digits,
+    and the client has to offer that format or the server drops the method.
+
 ### The second implementation
 
 `tools/test_server.py` is a server that was written from the specification
@@ -170,7 +202,7 @@ package for it.
 
 1. A client session that offers the `source@v1` role.
 2. A capture screen that starts the system audio capture.
-3. A pairing screen that shows the pairing token.
+3. A pairing screen that shows the pairing code, and the token below it.
 4. A foreground service that keeps the app alive while it streams.
 5. A status screen that shows the connection, the pairing state, and the
    stream state.
@@ -309,13 +341,35 @@ capture, and to see the state.
    `ws://<the-phone>:8928/sendspin`. The server finds the phone over the
    advertisement, so both must be on the same network.
 2. Write the pairing instructions into the app. The user pastes the token into
-   the Music Assistant pairing screen.
+   the Music Assistant pairing screen, or types the six-digit code.
 3. Tell the user where to find the input. The phone appears under **Live
    Inputs** in Music Assistant, once the SendSpin Source plugin is active.
 4. Follow the active roles, not the activities. The server approves a client
    by activating the source role. A source phone is never in a playback group,
    so the server declares no activities. An empty activity set is not a
    missing approval, and the status panel must not say that it is.
+
+### 8. Pairing by a code
+
+The token is a hundred and eight characters. The operator has to copy them
+off the phone and paste them into the server. The specification has a
+better way, and Music Assistant offers it.
+
+1. Offer the `dynamic_pairing_code` method in `client/hello`, with the
+   `digits` format and the `display` channel. Music Assistant drops the
+   method when the client does not offer the digits, and it has no scanner,
+   so the code has to be digits.
+2. Write the CPace responder. It is the password-authenticated exchange
+   that proves the operator knew the code. The group is the one the CPace
+   draft defines for curve25519.
+3. Derive the code from the handshake hash and the two nonces, and commit
+   to our own nonce before the server's arrives.
+4. Seal the opening of our nonce and the new long-term key under the key
+   that the exchange produced.
+5. Show the code on the pairing screen, in six digits and grouped in
+   threes. The phone cannot show it before the server starts the pairing,
+   so the screen names the steps until the code arrives.
+6. Keep the token below the code, for a server that cannot do the code.
 
 ## Exit criteria
 
@@ -330,6 +384,8 @@ capture, and to see the state.
    again without the user doing anything.
 6. The app uses AES-GCM by default and falls back to ChaCha-Poly on a device
    without hardware AES.
+7. The operator pairs the phone by typing six digits, instead of pasting a
+   hundred and eight characters.
 
 ## Risks
 

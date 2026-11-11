@@ -145,6 +145,19 @@ These need a phone. A test that cannot run on the JVM belongs here.
 4. The time of a sample follows from the frame count. Two blocks of the
    same length carry the same time, whatever the clock says.
 
+## Tests that need the pairing screen
+
+These need a phone and a server.
+
+1. The phone shows the code when the server starts the pairing. The server
+   has to send its nonce first, so the code cannot appear earlier.
+2. The code is six digits, and it is grouped in threes on the screen.
+3. The operator types the code into the server, and the pairing completes.
+4. A wrong code does not end the attempt. The server asks for another round,
+   and the phone keeps showing the same code.
+5. The server refuses an activation that the pairing does not allow, and the
+   phone says so instead of sending audio.
+
 ## Test data
 
 1. A 1 kHz sine wave at 48 kHz, stereo, 16-bit. It makes a dropped sample
