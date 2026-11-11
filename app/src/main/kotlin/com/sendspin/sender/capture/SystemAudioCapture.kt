@@ -155,10 +155,22 @@ class SystemAudioCapture(
             // first of them is one block old. The time of the first sample
             // is what the protocol carries.
             val captureMicros = now - (frames.toLong() * 1_000_000L) / sampleRate
-            val samples = ShortArray(frames)
+            // A frame holds one sample for each channel, so the block needs
+            // two shorts for every frame. A shorter array would take only
+            // the first half of the read and drop the rest without a word.
+            val samples = ShortArray(frames * CHANNEL_COUNT)
             buffer.position(0)
             buffer.limit(read)
-            buffer.asShortBuffer().get(samples)
+            val shorts = buffer.asShortBuffer()
+            if (shorts.remaining() < samples.size) {
+                // The read gave fewer samples than the block needs. The
+                // audio would be short, so the capture stops rather than
+                // sending a hole.
+                Log.e(TAG, "The system audio capture read $read bytes, which is too few")
+                listener.onError("The system audio capture read a short block")
+                break
+            }
+            shorts.get(samples)
             blocks++
             if (read < smallestRead) smallestRead = read
             if (read > largestRead) largestRead = read
