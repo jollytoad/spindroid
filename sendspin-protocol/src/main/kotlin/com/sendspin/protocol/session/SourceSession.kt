@@ -5,12 +5,18 @@ import com.sendspin.protocol.crypto.NoiseSuite
 import com.sendspin.protocol.crypto.X25519
 import com.sendspin.protocol.noise.Kkpsk2Handshake
 import com.sendspin.protocol.noise.NoiseTransport
+import com.sendspin.protocol.pairing.PairingCode
+import com.sendspin.protocol.pairing.PairingWrap
+import com.sendspin.protocol.pairing.cpace.CPaceResponder
 import com.sendspin.protocol.protocol.AudioChunk
 import com.sendspin.protocol.protocol.ClientGoodbyePayload
 import com.sendspin.protocol.protocol.ClientHelloPayload
 import com.sendspin.protocol.protocol.ClientInitPayload
+import com.sendspin.protocol.protocol.ClientPairAuthPayload
+import com.sendspin.protocol.protocol.ClientPairConfirmPayload
 import com.sendspin.protocol.protocol.ClientPairFinalizePayload
 import com.sendspin.protocol.protocol.ClientPairInitPayload
+import com.sendspin.protocol.protocol.ClientPairRetryPayload
 import com.sendspin.protocol.protocol.ClientSourceSupport
 import com.sendspin.protocol.protocol.ClientStatePayload
 import com.sendspin.protocol.protocol.ClientStreamEndPayload
@@ -31,6 +37,9 @@ import com.sendspin.protocol.protocol.ServerActivatePayload
 import com.sendspin.protocol.protocol.ServerCommandPayload
 import com.sendspin.protocol.protocol.ServerHelloPayload
 import com.sendspin.protocol.protocol.ServerInitPayload
+import com.sendspin.protocol.protocol.ServerPairAuthPayload
+import com.sendspin.protocol.protocol.ServerPairConfirmPayload
+import com.sendspin.protocol.protocol.ServerPairInitPayload
 import com.sendspin.protocol.protocol.ServerTimePayload
 import com.sendspin.protocol.protocol.SourceCommand
 import com.sendspin.protocol.protocol.SourceFeatures
@@ -113,6 +122,29 @@ public class SourceSession(
     private var pendingLongTermPsk: ByteArray? = null
 
     private var pairingIndex = 0
+
+    /**
+     * The nonce this client contributes to the pairing code.
+     *
+     * It is drawn when the pairing starts and kept until the pairing ends.
+     * The server never sees it until the exchange has proved the operator
+     * knew the code.
+     */
+    private var pairingNonceB: ByteArray? = null
+
+    /**
+     * The pairing code the operator reads.
+     *
+     * It is null until the server's nonce has arrived, because the code
+     * depends on it.
+     */
+    private var pairingCode: String? = null
+
+    /** The round of the pairing attempt. The first round is one. */
+    private var pairingRound = 0
+
+    /** The CPace run of the current round. */
+    private var pakeResponder: CPaceResponder? = null
 
     private val filter = TimeFilter()
     private val burst = ClockSyncBurst()
@@ -427,6 +459,9 @@ public class SourceSession(
                 MessageType.SERVER_ACTIVATE -> onServerActivate(payload)
                 MessageType.SERVER_TIME -> onServerTime(payload)
                 MessageType.SERVER_COMMAND -> onServerCommand(payload)
+                MessageType.SERVER_PAIR_INIT -> onServerPairInit(payload)
+                MessageType.SERVER_PAIR_AUTH -> onServerPairAuth(payload)
+                MessageType.SERVER_PAIR_CONFIRM -> onServerPairConfirm(payload)
                 MessageType.SERVER_PAIR_FINALIZE -> onServerPairFinalize()
                 MessageType.SERVER_UNPAIR -> onServerUnpair()
                 MessageType.PAIR_ABORT -> onPairAbort(payload)
@@ -461,6 +496,10 @@ public class SourceSession(
                 ),
                 supportedPairMethods = mapOf(
                     PAIRING_METHOD to PairMethodDescriptor(locations = listOf("device")),
+                    DYNAMIC_PAIRING_METHOD to PairMethodDescriptor(
+                        outChannels = listOf("display"),
+                        formats = listOf(DIGITS_FORMAT),
+                    ),
                 ),
                 unpairedAccess = UnpairedAccess(enabled = configuration.unpairedAccessEnabled),
             ),
@@ -502,15 +541,25 @@ public class SourceSession(
     /**
      * Handles a pairing request from the server.
      *
-     * The client offers one pairing method, the pairing PSK. The server
-     * must have matched that key, or the request is refused.
+     * The client offers two methods. The pairing key needs a token that the
+     * operator copies. The dynamic pairing code needs six digits that the
+     * operator reads off this screen.
      */
     private fun onPairingRequested(activate: ServerActivatePayload) {
         val pairing = activate.pairing ?: return
-        if (pairing.method != PAIRING_METHOD) {
-            abortPairing("method_not_supported")
-            return
+        when (pairing.method) {
+            PAIRING_METHOD -> startPairingKey()
+            DYNAMIC_PAIRING_METHOD -> startDynamicPairing(pairing.format)
+            else -> abortPairing("method_not_supported")
         }
+    }
+
+    /**
+     * Starts the pairing with the pairing key.
+     *
+     * The server must have matched that key, or the request is refused.
+     */
+    private fun startPairingKey() {
         if (matched != PskCategory.PAIRING) {
             abortPairing("method_not_supported")
             return
@@ -534,6 +583,148 @@ public class SourceSession(
     }
 
     /**
+     * Starts the pairing with a dynamic pairing code.
+     *
+     * A code pairing runs over a connection that nothing has authenticated
+     * yet, so the key that opened it has to be the Sentinel key. The code
+     * itself appears once the server has sent its nonce.
+     */
+    private fun startDynamicPairing(format: String?) {
+        if (format != DIGITS_FORMAT) {
+            abortPairing("method_not_supported")
+            return
+        }
+        if (matched != PskCategory.SENTINEL) {
+            abortPairing("method_not_supported")
+            return
+        }
+        pairingIndex += 1
+        pairingRound = 0
+        pairingCode = null
+        val nonce = PairingCode.generateNonce(random)
+        pairingNonceB = nonce
+        currentState = currentState.copy(pairingInProgress = true, pairingCode = null)
+        publish()
+        // The commitment goes out before the server's nonce is known, so the
+        // server cannot steer the code to a value it already knows.
+        sendJson(
+            MessageType.CLIENT_PAIR_INIT,
+            ClientPairInitPayload(
+                pairingIndex = pairingIndex,
+                commitB = Base64Url.encode(PairingCode.commit(nonce)),
+            ),
+        )
+    }
+
+    /**
+     * Handles `server/pair-init`, which begins a round.
+     *
+     * The first round carries the server's nonce, and the code comes from
+     * it. A later round carries none, and runs under a new session id.
+     */
+    private fun onServerPairInit(payload: ByteArray) {
+        val message = runCatching {
+            codec.decode<ServerPairInitPayload>(MessageType.SERVER_PAIR_INIT, payload)
+        }.getOrNull() ?: return protocolError()
+        val nonceB = pairingNonceB ?: return protocolError()
+        val nonceA = message.nonceA?.let { Base64Url.decode(it) }
+        if (nonceA != null && nonceA.size != PairingCode.NONCE_SIZE) return protocolError()
+        val handshakeHash = channel?.handshakeHash ?: return protocolError()
+        if (pairingRound == 0) {
+            // The server's nonce arrives in the first round only.
+            if (nonceA == null) return protocolError()
+            pairingRound = 1
+            val code = PairingCode.deriveDigits(handshakeHash, nonceA, nonceB)
+            pairingCode = code
+            currentState = currentState.copy(pairingCode = code)
+            publish()
+        } else {
+            // A later round carries no nonce, and the code stays the same.
+            if (nonceA != null) return protocolError()
+            pairingRound += 1
+        }
+        // Every round is a fresh exchange, with fresh secrets and its own
+        // session id.
+        val code = pairingCode ?: return protocolError()
+        val sid = PairingWrap.sessionId(handshakeHash, pairingIndex, pairingRound)
+        pakeResponder = CPaceResponder(prs = code.toByteArray(Charsets.UTF_8), sid = sid)
+    }
+
+    /**
+     * Handles `server/pair-auth`, which carries the server's share.
+     */
+    private fun onServerPairAuth(payload: ByteArray) {
+        val message = runCatching {
+            codec.decode<ServerPairAuthPayload>(MessageType.SERVER_PAIR_AUTH, payload)
+        }.getOrNull() ?: return protocolError()
+        val responder = pakeResponder ?: return protocolError()
+        val peerShare = Base64Url.decode(message.pakeMsg1) ?: return protocolError()
+        // The share is computed before it is sent, but it is only sent once
+        // the server's share has proved to be usable. Answering an unusable
+        // share would hand an unauthenticated peer something it did not earn.
+        val ourShare = responder.publicShare
+        if (!responder.derive(peerShare)) return protocolError()
+        sendJson(
+            MessageType.CLIENT_PAIR_AUTH,
+            ClientPairAuthPayload(pakeMsg2 = Base64Url.encode(ourShare)),
+        )
+    }
+
+    /**
+     * Handles `server/pair-confirm`, which carries the server's tag.
+     *
+     * A tag that does not verify means the operator typed the wrong code.
+     * Another round runs then, under a new session id, and the code stays
+     * on the screen.
+     */
+    private fun onServerPairConfirm(payload: ByteArray) {
+        val message = runCatching {
+            codec.decode<ServerPairConfirmPayload>(MessageType.SERVER_PAIR_CONFIRM, payload)
+        }.getOrNull() ?: return protocolError()
+        val responder = pakeResponder ?: return protocolError()
+        val nonceB = pairingNonceB ?: return protocolError()
+        val serverKc = Base64Url.decode(message.serverKc) ?: return protocolError()
+        if (!responder.verify(serverKc)) {
+            if (pairingRound >= ROUND_LIMIT) {
+                abortPairing("pairing_code_mismatch")
+                return
+            }
+            pakeResponder = null
+            sendJson(MessageType.CLIENT_PAIR_RETRY, ClientPairRetryPayload())
+            return
+        }
+        val handshakeHash = channel?.handshakeHash ?: return protocolError()
+        val sid = PairingWrap.sessionId(handshakeHash, pairingIndex, pairingRound)
+        val isk = responder.isk
+        // The opening of our nonce and the new long-term key travel only
+        // under the key that the exchange produced.
+        val wrappedNonce = PairingWrap.seal(
+            configuration.suite,
+            PairingWrap.wrapKey(PairingWrap.NONCE_LABEL, sid, isk),
+            nonceB,
+        )
+        val psk = ByteArray(32).also { random.nextBytes(it) }
+        val wrappedPsk = PairingWrap.seal(
+            configuration.suite,
+            PairingWrap.wrapKey(PairingWrap.PSK_LABEL, sid, isk),
+            psk,
+        )
+        pendingLongTermPsk = psk
+        // The two messages go back to back, without waiting in between.
+        sendJson(
+            MessageType.CLIENT_PAIR_CONFIRM,
+            ClientPairConfirmPayload(
+                clientKc = Base64Url.encode(responder.tag()),
+                wrappedNonceB = Base64Url.encode(wrappedNonce),
+            ),
+        )
+        sendJson(
+            MessageType.CLIENT_PAIR_FINALIZE,
+            ClientPairFinalizePayload(wrappedPsk = Base64Url.encode(wrappedPsk)),
+        )
+    }
+
+    /**
      * Handles the `server/pair-finalize` message.
      *
      * The server stored the key, so the client stores its side of the
@@ -552,9 +743,11 @@ public class SourceSession(
             ),
         )
         paired = true
+        clearPairing()
         currentState = currentState.copy(
             paired = true,
             pairingInProgress = false,
+            pairingCode = null,
             pairedServers = pairedServerNames(),
         )
         publish()
@@ -586,8 +779,10 @@ public class SourceSession(
             codec.decode<PairAbortPayload>(MessageType.PAIR_ABORT, payload)
         }.getOrNull() ?: return
         pendingLongTermPsk = null
+        clearPairing()
         currentState = currentState.copy(
             pairingInProgress = false,
+            pairingCode = null,
             error = "The pairing stopped: ${abort.reason}",
         )
         publish()
@@ -595,9 +790,35 @@ public class SourceSession(
 
     /** Aborts a pairing attempt. */
     private fun abortPairing(reason: String) {
+        clearPairing()
         sendJson(MessageType.PAIR_ABORT, PairAbortPayload(reason = reason))
-        currentState = currentState.copy(pairingInProgress = false)
+        currentState = currentState.copy(pairingInProgress = false, pairingCode = null)
         publish()
+    }
+
+    /**
+     * Forgets everything that belongs to a pairing attempt.
+     *
+     * The nonce and the exchange are secret, so they go as soon as the
+     * attempt ends.
+     */
+    private fun clearPairing() {
+        pairingNonceB = null
+        pairingCode = null
+        pairingRound = 0
+        pakeResponder = null
+    }
+
+    /**
+     * Ends the connection because the server broke the protocol.
+     *
+     * The connection closes without an application-level message. Telling
+     * an unauthenticated peer which check it failed is exactly what that
+     * would leak.
+     */
+    private fun protocolError() {
+        clearPairing()
+        fail("The server broke the pairing rules")
     }
 
     /**
@@ -880,6 +1101,28 @@ public class SourceSession(
 
         /** The pairing method this session offers. */
         public const val PAIRING_METHOD: String = "pairing_psk"
+
+        /**
+         * The pairing method that shows a code instead of a token.
+         *
+         * The operator reads six digits off this screen and types them into
+         * the server, instead of copying a long token.
+         */
+        public const val DYNAMIC_PAIRING_METHOD: String = "dynamic_pairing_code"
+
+        /** The emission format of the code, the only one this client offers. */
+        public const val DIGITS_FORMAT: String = "digits"
+
+        /** The activity that says the server wants to play audio on the client. */
+        public const val ACTIVITY_PLAYBACK: String = "playback"
+
+        /**
+         * How many rounds one pairing attempt may run.
+         *
+         * A round that ends with a wrong code is tried again, and the limit
+         * is what stops the attempts.
+         */
+        public const val ROUND_LIMIT: Int = 20
 
         /**
          * The number of filter updates the clock needs before the session

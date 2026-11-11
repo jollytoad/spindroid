@@ -46,6 +46,14 @@ public data class SourceSessionState(
     public val paired: Boolean = false,
     /** A pairing attempt is running. */
     public val pairingInProgress: Boolean = false,
+    /**
+     * The pairing code the operator reads.
+     *
+     * It is six digits, and it is null until the server has started the
+     * pairing. The code depends on the server's nonce, so the client cannot
+     * show it before the server asks.
+     */
+    public val pairingCode: String? = null,
     /** The purposes the server declared. */
     public val activities: List<String> = emptyList(),
     /** The roles the server activated. */
