@@ -140,6 +140,20 @@ Several things were harder than they looked. Most are now covered by a test.
     history. The commit that added it is `0b0d267`, and reverting that one
     commit brings it back.
 
+15. **An empty activity set does not mean the client is unapproved.** The
+    specification gates unpaired access on an operator approval, and it says
+    that the approval is thrown away on a successful pairing. A paired phone
+    therefore needs no approval, and Music Assistant never asks for one. The
+    server declares the `playback` activity only for a client that sits in an
+    active playback group. A source phone is never in one, so the server
+    leaves the activity set empty and carries the approval in the active
+    roles instead. The app read the activity set and told the user that the
+    server had not approved the phone, while the phone was streaming. The
+    app's own code gave the answer: it sends no sample at all unless the
+    source role is active, so a running stream is the proof that the server
+    had approved the phone. The status panel now follows the roles, and the
+    line about approval is gone.
+
 ### The second implementation
 
 `tools/test_server.py` is a server that was written from the specification
@@ -298,9 +312,10 @@ capture, and to see the state.
    the Music Assistant pairing screen.
 3. Tell the user where to find the input. The phone appears under **Live
    Inputs** in Music Assistant, once the SendSpin Source plugin is active.
-4. Handle the case where Music Assistant has not approved the client yet. The
-   server holds the connection at empty activities until the operator approves
-   it. Show that state in the status panel.
+4. Follow the active roles, not the activities. The server approves a client
+   by activating the source role. A source phone is never in a playback group,
+   so the server declares no activities. An empty activity set is not a
+   missing approval, and the status panel must not say that it is.
 
 ## Exit criteria
 
