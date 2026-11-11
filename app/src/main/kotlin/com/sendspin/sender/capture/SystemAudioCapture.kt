@@ -131,6 +131,11 @@ class SystemAudioCapture(
         var largestRead = 0
         var windowStart = System.nanoTime() / 1000
         var first = true
+        // The local time of the first sample of the stream. It is set from
+        // the first read and never changes.
+        var streamBaseMicros = -1L
+        // The number of frames that were read before the current block.
+        var framesBefore = 0L
         while (running) {
             buffer.clear()
             val read = audioRecord.read(buffer, bufferSize, AudioRecord.READ_BLOCKING)
@@ -151,10 +156,14 @@ class SystemAudioCapture(
             }
             val frames = read / BYTES_PER_FRAME
             val now = System.nanoTime() / 1000
-            // The read hands over the frames that the buffer holds, so the
-            // first of them is one block old. The time of the first sample
-            // is what the protocol carries.
-            val captureMicros = now - (frames.toLong() * 1_000_000L) / sampleRate
+            // The time of a sample follows from the number of frames before
+            // it, so it does not wobble with the moment a read happens to
+            // return. The base holds the time of the very first sample.
+            if (streamBaseMicros < 0) {
+                streamBaseMicros = now - (frames.toLong() * 1_000_000L) / sampleRate
+            }
+            val captureMicros = streamBaseMicros + (framesBefore.toLong() * 1_000_000L) / sampleRate
+            framesBefore += frames
             // A frame holds one sample for each channel, so the block needs
             // two shorts for every frame. A shorter array would take only
             // the first half of the read and drop the rest without a word.
