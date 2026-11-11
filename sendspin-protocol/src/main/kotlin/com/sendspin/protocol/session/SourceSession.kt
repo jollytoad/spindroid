@@ -218,29 +218,19 @@ public class SourceSession(
      * asked for audio.
      */
     public fun onCapturedAudio(pcm: ByteArray, captureTimestampMicros: Long) {
-        var serverTimestamp = 0L
         synchronized(lock) {
-            if (!streaming) {
-                listener.onAudioChunkDropped(captureTimestampMicros, 0, "not streaming")
-                return
-            }
+            if (!streaming) return
             val now = clock.nowMicros()
             // The backlog guard: audio that waited too long is stale, and
             // the server would play it out of time. Drop it and resume
             // from live.
-            if (now - captureTimestampMicros > MAX_BACKLOG_MICROS) {
-                listener.onAudioChunkDropped(captureTimestampMicros, now - captureTimestampMicros, "stale")
-                return
-            }
-            serverTimestamp = filter.computeServerTime(captureTimestampMicros)
+            if (now - captureTimestampMicros > MAX_BACKLOG_MICROS) return
+            val timestamp = filter.computeServerTime(captureTimestampMicros)
             sendEncrypted(
                 MessageId.SOURCE_AUDIO,
-                AudioChunk.sourceBody(serverTimestamp, pcm),
+                AudioChunk.sourceBody(timestamp, pcm),
             )
         }
-        // The callback sits outside the lock, because a listener may do
-        // work that is slow, and the session should not wait for it.
-        listener.onAudioChunk(pcm, captureTimestampMicros, serverTimestamp)
     }
 
     /**

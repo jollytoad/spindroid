@@ -127,8 +127,6 @@ class SystemAudioCapture(
         // read fail at once with the code -2.
         val buffer = ByteBuffer.allocateDirect(bufferSize).order(ByteOrder.LITTLE_ENDIAN)
         var blocks = 0
-        var smallestRead = Int.MAX_VALUE
-        var largestRead = 0
         var windowStart = System.nanoTime() / 1000
         var first = true
         // The local time of the first sample of the stream. It is set from
@@ -181,17 +179,9 @@ class SystemAudioCapture(
             }
             shorts.get(samples)
             blocks++
-            if (read < smallestRead) smallestRead = read
-            if (read > largestRead) largestRead = read
             if (now - windowStart >= WINDOW_MICROS) {
-                Log.i(
-                    TAG,
-                    "The system audio capture read $blocks blocks of $smallestRead to $largestRead bytes " +
-                        "in the last second",
-                )
+                Log.i(TAG, "The system audio capture read $blocks blocks in the last second")
                 blocks = 0
-                smallestRead = Int.MAX_VALUE
-                largestRead = 0
                 windowStart = now
             }
             listener.onBlock(

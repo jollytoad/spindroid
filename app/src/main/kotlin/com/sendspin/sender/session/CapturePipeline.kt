@@ -29,9 +29,6 @@ class CapturePipeline(
     /** The blocks that arrived in the current window. */
     private var blocksInWindow = 0
 
-    /** The chunks that were made in the current window. */
-    private var chunksInWindow = 0
-
     /** The time the current window started, in microseconds. */
     private var windowStartMicros = 0L
 
@@ -54,7 +51,6 @@ class CapturePipeline(
             chunker.offer(converted, block.captureTimestampMicros)
         }
         for (chunk in chunks) {
-            chunksInWindow++
             onChunk(toBytes(chunk.samples), chunk.timestampMicros)
         }
     }
@@ -91,15 +87,9 @@ class CapturePipeline(
         // the number of blocks per second.
         val perSecond = blocksInWindow * (1_000_000L / WINDOW_MICROS)
         val loudest = peak
-        val chunks = chunksInWindow * (1_000_000L / WINDOW_MICROS)
         blocksInWindow = 0
-        chunksInWindow = 0
         windowStartMicros = now
         peak = 0
-        android.util.Log.i(
-            "SendSpin",
-            "The capture made $chunks chunks from $perSecond blocks a second",
-        )
         onMeasurements(perSecond.toInt(), loudest)
     }
 
