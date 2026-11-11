@@ -34,6 +34,7 @@ sends every sample it captures, and the browser plays what the phone plays.
 | The clock error settles below 1 ms in the status panel | Done on the phone. The panel showed 723 to 996 µs. The filter settles at a few tens of microseconds over a local socket. |
 | The app survives a screen-off and a network drop. It reconnects on its own. | Open. The phone keeps the port open and the advertisement up, so the server can dial in again. The server has to make the new connection, and that is not proven on the phone. |
 | The app uses AES-GCM by default and falls back to ChaCha-Poly on a device without hardware AES | Written. The benchmark picks the suite, and the client offers the other one when the server refuses. |
+| The user can pick the player that plays the phone, from the phone | Open. The sign in works on the phone, and the two commands that route the audio are proven against the server. The picker itself is not written. |
 
 | Deliverable | Where |
 | --- | --- |
@@ -43,6 +44,7 @@ sends every sample it captures, and the browser plays what the phone plays.
 | The foreground service | `app/.../service/SendSpinService.kt` |
 | The incoming path and the advertisement | `app/.../net/`, `app/.../discovery/` |
 | The screen | `app/.../ui/MainScreen.kt` |
+| The client for the Music Assistant API | `music-assistant-client/`, `app/.../mass/` |
 | A second implementation of the server side | `tools/test_server.py` |
 
 ### Notes on what the work found
@@ -185,6 +187,32 @@ Several things were harder than they looked. Most are now covered by a test.
     and Music Assistant offers it as soon as the client says that it can
     show one. Music Assistant has no scanner, so the code has to be digits,
     and the client has to offer that format or the server drops the method.
+
+20. **The choice of player is not in the SendSpin protocol.** The source
+    role streams audio to the server, and the server decides where it
+    plays. The whole specification has no word for a sink, a route, or a
+    destination. The `controller` role is the closest thing, and it
+    controls the group the client is already in; it does not choose where
+    a source plays. So the phone has to ask Music Assistant over its own
+    web interface, and that is a second credential.
+
+21. **A guest account is enough to pick a player.** The guest role holds
+    `players.read` and `players.control`, and those are the only two
+    scopes the picker needs. A phone does not need an administrator
+    account to choose a speaker.
+
+22. **The phone already knows the name that the server uses for it.** The
+    server lists the phone as an audio source under the client's own id,
+    and the id is the base64url of the client's public key. The phone
+    built that key, so it can write the source URI without asking the
+    server for it.
+
+23. **Android blocks the plain HTTP that the server serves.** The server's
+    web interface is plain HTTP on the local network, and the address is
+    found over mDNS, so it cannot be written down ahead of time. Android
+    refuses the connection by default, and the app has to allow cleartext
+    traffic. The first sign in failed with a message that named nothing,
+    because the client swallowed the reason. The message now carries it.
 
 ### The second implementation
 
@@ -371,6 +399,31 @@ better way, and Music Assistant offers it.
    so the screen names the steps until the code arrives.
 6. Keep the token below the code, for a server that cannot do the code.
 
+### 9. Signing in to Music Assistant
+
+The SendSpin protocol has no way to name a target player. The source role
+streams audio to the server, and the server decides where it plays. So the
+choice of player belongs to the server's own API, and the phone has to ask
+the server over it.
+
+1. Write a client for the Music Assistant API. The API takes one envelope
+   per command: the name of the command, and the arguments.
+2. Sign in. The server gives a token, and the token authenticates the later
+   commands. The name and the password go over plain HTTP on the local
+   network, so the connection needs the cleartext policy that Android
+   blocks by default.
+3. Find the address of the server over mDNS. The server advertises itself
+   under `_mass._tcp.local.`, and the record gives the address of its web
+   interface.
+4. Keep the token in encrypted preferences, beside the keys of the
+   protocol. It is a secret.
+5. List the players with `players/all`, and point one at the phone with
+   `players/cmd/select_source`. The source is the phone's own client id,
+   which the phone already knows.
+
+A guest account is enough for this. The guest role holds `players.read` and
+`players.control`, and no more than that is needed.
+
 ## Exit criteria
 
 1. The app builds and installs on a physical device running Android 13 or
@@ -386,6 +439,8 @@ better way, and Music Assistant offers it.
    without hardware AES.
 7. The operator pairs the phone by typing six digits, instead of pasting a
    hundred and eight characters.
+8. The operator picks the player that plays the phone, from the phone, after
+   signing in.
 
 ## Risks
 

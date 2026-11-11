@@ -158,6 +158,21 @@ These need a phone and a server.
 5. The server refuses an activation that the pairing does not allow, and the
    phone says so instead of sending audio.
 
+## Tests that need the Music Assistant account
+
+These need a phone and a running server.
+
+1. The phone finds the server over mDNS, without the operator typing an
+   address.
+2. The sign in works with the right name and password, and the screen shows
+   the account.
+3. The wrong password shows the reason that the server gave.
+4. The token survives a restart of the app, and the screen still shows the
+   account.
+5. The phone can list the players, and picking one makes the server play
+   the phone's audio on it. The phone's own id is the name that the server
+   knows it by, so the phone writes the source URI itself.
+
 ## Test data
 
 1. A 1 kHz sine wave at 48 kHz, stereo, 16-bit. It makes a dropped sample
