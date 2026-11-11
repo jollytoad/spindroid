@@ -22,14 +22,15 @@ proved them. The screen has no picker for either.
 
 The app is installed on a real phone. The server pairs with it, the clock
 settles below a millisecond, the capture follows the sound that the phone
-plays, and the audio comes out of the browser. The sound is distorted, and
-that is the next problem.
+plays, and the audio comes out of the browser. The sound was distorted, and
+the capture was the cause. It threw away half of every read. The phone now
+sends every sample it captures, and the browser plays what the phone plays.
 
 | Exit criterion | State |
 | --- | --- |
 | The app builds and installs on a physical device running Android 13 or later | Done. The app builds, installs, and runs on the test phone. |
 | Music Assistant shows the phone under Live Inputs after the user pastes the pairing token | Done. Music Assistant paired with the phone through `pairing_psk` on the test phone. |
-| The user can select the phone as an input in Music Assistant, and the audio plays on a speaker | Open. The audio comes out of the browser, but it is distorted. |
+| The user can select the phone as an input in Music Assistant, and the audio plays on a speaker | Done on the phone. The browser plays the music the phone plays, without the jitter over the bass. |
 | The clock error settles below 1 ms in the status panel | Done on the phone. The panel showed 723 to 996 µs. The filter settles at a few tens of microseconds over a local socket. |
 | The app survives a screen-off and a network drop. It reconnects on its own. | Open. The phone keeps the port open and the advertisement up, so the server can dial in again. The server has to make the new connection, and that is not proven on the phone. |
 | The app uses AES-GCM by default and falls back to ChaCha-Poly on a device without hardware AES | Written. The benchmark picks the suite, and the client offers the other one when the server refuses. |
@@ -109,6 +110,35 @@ Several things were harder than they looked. Most are now covered by a test.
     declared the parameter as non-null, so the branch that reports a failed
     bind never ran. The parameter is nullable now, and the failure reaches
     the status panel.
+
+12. **A frame is not a sample.** A frame holds one sample for each channel,
+    so a block of frames needs two shorts for every frame. The capture made
+    its array with one short for every frame, so it held half the audio. The
+    copy from the buffer filled that half and left the rest behind, and
+    nothing said so. The server then got twenty milliseconds of audio for
+    every forty milliseconds of time. It read that as a sample rate of half
+    the announced rate, so it stretched the stream to fit, and the stretch
+    is what the browser played. The bass took the worst of it, because a
+    stretched low note changes more in phase than a stretched high one.
+
+13. **The time of a sample follows from the frame count, not from the
+    clock.** The capture worked the time of a sample out from the clock at
+    the moment the read returned, less the length of the block. That
+    estimate moves with the moment the read happens to return, so the times
+    of the chunks wobbled by a millisecond or so. The server anchors the
+    stream on those times, so the wobble reached the sound. The first
+    sample now keeps the time the first read gave it, and every later
+    sample follows from the number of frames before it.
+
+14. **A wrong stream shows up in the numbers, not in the sound.** The
+    browser hears the tune with a jittery bass over it, and the phone
+    plays the same music cleanly from its own speaker. That tells the
+    fault is in what the phone sends, but not where. A temporary dump of
+    every chunk settled it in one run: the chunk count was half of what
+    the chunker should make, and the timestamps jumped by thirty-two
+    milliseconds again and again. The dump is gone now, but it is in the
+    history. The commit that added it is `0b0d267`, and reverting that one
+    commit brings it back.
 
 ### The second implementation
 
@@ -207,8 +237,12 @@ package for it.
    - Register a `MediaProjection.Callback` and stop the capture on `onStop`.
    - Read into a direct buffer. A buffer in the heap makes every read fail
      with the code -2.
+   - Give the block one short for every sample of every channel. A frame
+     holds one sample for each channel, so a shorter block takes only the
+     first half of the read and drops the rest without a word.
    - Stamp the block with the time of its first sample, not the time of the
-     read.
+     read. The time follows from the number of frames before the sample, so
+     it does not wobble with the moment the read returns.
 3. Write the resampler. The capture rate and the announced rate may differ.
    The server resamples, so the app must send one rate consistently. Pick the
    capture rate and announce it. The plan uses 48 kHz, 16-bit, stereo, which

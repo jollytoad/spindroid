@@ -130,6 +130,21 @@ Checks on each version:
 7. In server mode, connect a SendSpin player to the phone and confirm the
    audio plays.
 
+## Tests that need the capture path
+
+These need a phone. A test that cannot run on the JVM belongs here.
+
+1. The capture makes the chunks it should. The chunker holds twenty
+   milliseconds of audio, so the count of the chunks must match the count
+   of the samples. A capture that loses half of a read still sounds like
+   music, and only the count gives it away.
+2. The capture reads a direct buffer. A buffer in the heap makes every read
+   fail with the code -2.
+3. The capture hands over every sample of the read. A block of frames needs
+   one short for every sample of every channel.
+4. The time of a sample follows from the frame count. Two blocks of the
+   same length carry the same time, whatever the clock says.
+
 ## Test data
 
 1. A 1 kHz sine wave at 48 kHz, stereo, 16-bit. It makes a dropped sample
