@@ -480,9 +480,6 @@ public class SourceSession(
         currentState = currentState.copy(
             activities = activities,
             activeRoles = activeRoles,
-            // The server holds the connection with empty activities until
-            // the operator approves the client.
-            awaitingApproval = activities.isEmpty(),
         )
         publish()
         if (activate.pairing != null) {

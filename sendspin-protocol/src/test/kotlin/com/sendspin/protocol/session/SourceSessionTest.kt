@@ -444,13 +444,19 @@ class SourceSessionTest {
         )
     }
 
-    /** Activates the source role on the server. */
+    /**
+     * Activates the source role on the server.
+     *
+     * Music Assistant declares no activities for a source. The phone is never
+     * in a playback group, so the server has no playback purpose to declare.
+     * The approval lives in the active roles.
+     */
     private fun activateSource(session: SourceSession, server: TestServer) {
         session.onBinaryMessage(
             server.encryptJson(
                 MessageType.SERVER_ACTIVATE,
                 ServerActivatePayload(
-                    activities = listOf("playback"),
+                    activities = listOf(),
                     activeRoles = listOf("source@v1"),
                 ),
             ),
@@ -890,28 +896,32 @@ class SourceSessionTest {
     }
 
     @Test
-    fun `the session waits for the operator to approve it`() {
+    fun `the session streams when the server declares no activities`() {
         val (session, transport, server) = handshake()
         sayHello(session, server)
 
-        // The server holds the connection with empty activities until the
-        // operator approves the client.
+        // Music Assistant holds a source with no activities. The phone is
+        // never in a playback group, so there is no playback purpose to
+        // declare. The server still activates the source role, and that is
+        // what approves the phone.
         session.onBinaryMessage(
             server.encryptJson(
                 MessageType.SERVER_ACTIVATE,
-                ServerActivatePayload(activities = listOf(), activeRoles = listOf()),
+                ServerActivatePayload(activities = listOf(), activeRoles = listOf("source@v1")),
             ),
         )
-        assertTrue(session.state.awaitingApproval)
+        convergeClock(session, server)
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_COMMAND,
+                ServerCommandPayload(source = SourceCommand(command = "start")),
+            ),
+        )
+        session.onCapturedAudio(byteArrayOf(1, 2, 3, 4), clock.now)
 
-        // The operator approves it, and the activities follow.
-        session.onBinaryMessage(
-            server.encryptJson(
-                MessageType.SERVER_ACTIVATE,
-                ServerActivatePayload(activities = listOf("playback"), activeRoles = listOf()),
-            ),
-        )
-        assertFalse(session.state.awaitingApproval)
+        assertTrue(session.state.streaming)
+        val sent = server.nextBinary(MessageId.SOURCE_AUDIO)
+        assertEquals(MessageId.SOURCE_AUDIO.toByte(), sent[0])
     }
 
     @Test

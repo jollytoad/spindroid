@@ -48,14 +48,6 @@ public data class SourceSessionState(
     public val pairingInProgress: Boolean = false,
     /** The purposes the server declared. */
     public val activities: List<String> = emptyList(),
-    /**
-     * The server has not approved the client yet.
-     *
-     * The server holds the connection with empty activities until the
-     * operator approves it. The user interface shows that state, because
-     * nothing else happens while it lasts.
-     */
-    public val awaitingApproval: Boolean = false,
     /** The roles the server activated. */
     public val activeRoles: List<String> = emptyList(),
     /** The client offers its audio to the server. */

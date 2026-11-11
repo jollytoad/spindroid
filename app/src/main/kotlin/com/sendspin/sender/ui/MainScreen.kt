@@ -213,15 +213,6 @@ private fun StatusSection(
                 label = stringResource(R.string.label_build),
                 value = buildLabel,
             )
-            if (state.awaitingApproval) {
-                HorizontalDivider()
-                // The server holds the connection until the operator
-                // approves the client in Music Assistant.
-                Text(
-                    text = stringResource(R.string.state_awaiting_approval),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
             state.error?.let { error ->
                 HorizontalDivider()
                 Text(text = error, style = MaterialTheme.typography.bodyMedium)
