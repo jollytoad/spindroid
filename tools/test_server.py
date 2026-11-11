@@ -320,6 +320,11 @@ class Connection:
         self.time_exchanges = 0
         self.pairing_psk = ""
         self.audio_requested = False
+        # The keys the re-handshake needs.
+        self.server_static_private = b""
+        self.client_static_public = b""
+        self.handshake_hash = b""
+        self.long_term_psk = b""
 
     async def handle(self) -> None:
         try:
@@ -387,10 +392,14 @@ class Connection:
         send_cipher, receive_cipher = noise.split()
         self.send_cipher = send_cipher
         self.receive_cipher = receive_cipher
+        # The re-handshake that follows the pairing needs these three.
+        self.server_static_private = server_static.private_bytes_raw()
+        self.client_static_public = unb64url(self.client_id)
+        self.handshake_hash = noise.state.hash
         self.server.report.write("handshake-complete", psk=self.pairing_psk, server_id=server_id)
 
         # The server greets the client first. The client answers with its
-        # own hello, and the server then activates the source role.
+        # own hello, and the server then asks to pair.
         await self.send_hello()
 
     async def exchange(self) -> None:
@@ -425,7 +434,7 @@ class Connection:
 
         if kind == "client/hello":
             self.client_hello = payload
-            await self.activate_source()
+            await self.ask_to_pair()
         elif kind == "client/time":
             await self.answer_time(payload)
         elif kind == "client/state":
@@ -441,11 +450,61 @@ class Connection:
             self.server.report.write("pair-init", index=payload.get("pairing_index"))
         elif kind == "client/pair-finalize":
             self.server.report.write("pair-finalize")
+            self.long_term_psk = unb64url(payload["long_term_psk"])
             await self.send({"type": "server/pair-finalize", "payload": {}})
+            await self.rehandshake()
         elif kind == "client/goodbye":
             self.server.report.write("goodbye", reason=payload.get("reason"))
         elif kind == "client-stream/anything":
             pass
+
+    async def ask_to_pair(self) -> None:
+        """Asks the client to pair.
+
+        The client only offers the source role on a connection that a
+        pairing opened, so the server pairs first and then asks for the
+        audio.
+        """
+        await self.send(
+            {
+                "type": "server/activate",
+                "payload": {
+                    "activities": ["pairing"],
+                    "active_roles": [],
+                    "pairing": {"method": "pairing_psk"},
+                },
+            }
+        )
+
+    async def rehandshake(self) -> None:
+        """Runs a new handshake in the channel, to move to the paired key.
+
+        The prologue is the hash of the previous handshake. The client's
+        answer comes under the old keys, and the activation that follows
+        comes under the new ones.
+        """
+        noise = Handshake(self.server_static_private, self.client_static_public, self.handshake_hash)
+        first = noise.write_message1(
+            json.dumps(
+                {"psk_id": psk_id(self.long_term_psk), "psk_category": "lt"},
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        await self.send({"type": "noise/handshake", "payload": {"data": b64url(first)}})
+
+        frame = await self.websocket.recv()
+        if isinstance(frame, str):
+            raise ValueError("A cleartext message arrived during the re-handshake")
+        plaintext = self.receive_cipher.decrypt(b"", frame)
+        message = json.loads(plaintext[1:].decode("utf-8"))
+        if message.get("type") != "noise/handshake":
+            raise ValueError("The client did not answer the re-handshake")
+        noise.read_message2(unb64url(message["payload"]["data"]), self.long_term_psk)
+
+        self.send_cipher, self.receive_cipher = noise.split()
+        self.handshake_hash = noise.state.hash
+        self.server.report.write("rehandshake-complete")
+        await self.activate_source()
 
     async def send_hello(self) -> None:
         """Greets the client."""
@@ -486,11 +545,14 @@ class Connection:
 
         The activation comes before the clock synchronisation, because the
         client only starts the clock exchanges once the role is active.
+        The connection is on the paired key by now, so no activity is
+        declared. A source is never in a playback group, so the server has
+        no playback purpose to declare.
         """
         await self.send(
             {
                 "type": "server/activate",
-                "payload": {"activities": ["playback"], "active_roles": ["source@v1"]},
+                "payload": {"activities": [], "active_roles": ["source@v1"]},
             }
         )
 

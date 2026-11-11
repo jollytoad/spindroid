@@ -140,6 +140,13 @@ internal class TestServer(
     /** The category the server names. */
     var namedCategory: String = "sn"
 
+    /**
+     * The key the server names, when the category is not the Sentinel key.
+     *
+     * A long-term key is the one that a pairing produced.
+     */
+    var namedPsk: ByteArray? = null
+
     /** The Noise handshake, until it finishes. */
     private var handshake: Kkpsk2Handshake? = null
 
@@ -237,6 +244,7 @@ internal class TestServer(
         )!!
         val psk = when (namedCategory) {
             "pr" -> keys.pairingPsk
+            "lt" -> namedPsk ?: SendspinPsk.SENTINEL
             else -> SendspinPsk.SENTINEL
         }
         noise.readMessage2(answer, psk)

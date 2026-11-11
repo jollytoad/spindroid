@@ -511,11 +511,24 @@ public class SourceSession(
         val activate = runCatching {
             codec.decode<ServerActivatePayload>(MessageType.SERVER_ACTIVATE, payload)
         }.getOrNull() ?: return
+        // A server may only declare what the key that opened the connection
+        // allows. A server that asks for more gets a goodbye, because the
+        // captured audio must not reach a server that has not proved
+        // itself.
+        val refusal = inadmissibleReason(activate)
+        if (refusal != null) {
+            refuseActivation(refusal)
+            return
+        }
         activities = activate.activities
         // The active roles persist across a later activation that leaves them
-        // out, so the client keeps them until the server removes them.
+        // out, so the client keeps them until the server removes them. The
+        // exception is a connection that cannot carry roles at all. A code
+        // pairing runs over a connection that the Sentinel key opened, and
+        // such a connection carries no roles.
         val wasSourceActive = isSourceActive()
-        activeRoles = activate.activeRoles ?: activeRoles
+        activeRoles = activate.activeRoles
+            ?: if (isPlaybackCapable(activities)) activeRoles else emptyList()
         currentState = currentState.copy(
             activities = activities,
             activeRoles = activeRoles,
@@ -1054,6 +1067,90 @@ public class SourceSession(
     /** Whether the server activated the source role. */
     private fun isSourceActive(): Boolean = activeRoles.contains(SOURCE_ROLE)
 
+    /**
+     * Whether the connection may carry roles at all.
+     *
+     * A connection is playback-capable when its activities, with the
+     * playback activity added, are an allowed set for the key that opened
+     * it. A long-term key allows nothing but the playback activity. The
+     * Sentinel key and the pairing key allow the playback activity only
+     * when the client admits unpaired access, and this one does not. So a
+     * code pairing, which runs over a connection that the Sentinel key
+     * opened, carries no roles.
+     */
+    private fun isPlaybackCapable(declared: List<String>): Boolean =
+        isAllowedActivitySet(declared + ACTIVITY_PLAYBACK, configuration.unpairedAccessEnabled)
+
+    /**
+     * Whether the server may declare this set of activities.
+     *
+     * The specification names the sets that each key allows. The playback
+     * activity is only allowed with the Sentinel key or the pairing key
+     * when the client admits unpaired access, and this client does not.
+     */
+    private fun isAllowedActivitySet(declared: List<String>, unpairedAccess: Boolean): Boolean {
+        val set = declared.toSet()
+        if (set.any { it != ACTIVITY_PLAYBACK && it != ACTIVITY_PAIRING }) return false
+        return when (matched) {
+            PskCategory.LONG_TERM -> set.isEmpty() || set == setOf(ACTIVITY_PLAYBACK)
+            PskCategory.PAIRING, PskCategory.SENTINEL ->
+                if (unpairedAccess) {
+                    set.isEmpty() || set == setOf(ACTIVITY_PAIRING) ||
+                        set == setOf(ACTIVITY_PLAYBACK) ||
+                        set == setOf(ACTIVITY_PLAYBACK, ACTIVITY_PAIRING)
+                } else {
+                    set.isEmpty() || set == setOf(ACTIVITY_PAIRING)
+                }
+        }
+    }
+
+    /**
+     * The reason to refuse the server's activation, or null when it is
+     * allowed.
+     *
+     * The specification gives two reasons. A server that asks for the
+     * playback activity on a connection that has not been paired gets
+     * `pairing_required`, because the answer is to pair. A server that asks
+     * for anything else gets `unauthorized`.
+     */
+    private fun inadmissibleReason(activate: ServerActivatePayload): String? {
+        val declared = activate.activities
+        val roles = activate.activeRoles ?: emptyList()
+        if (isAdmissible(declared, roles, configuration.unpairedAccessEnabled)) return null
+        // The answer would be a pairing when unpaired access would have made
+        // the activation allowed.
+        if (isAdmissible(declared, roles, unpairedAccess = true)) return "pairing_required"
+        return "unauthorized"
+    }
+
+    /** Whether the activation is allowed, for the given unpaired access setting. */
+    private fun isAdmissible(
+        declared: List<String>,
+        roles: List<String>,
+        unpairedAccess: Boolean,
+    ): Boolean {
+        if (!isAllowedActivitySet(declared, unpairedAccess)) return false
+        if (roles.isEmpty()) return true
+        return isAllowedActivitySet(declared + ACTIVITY_PLAYBACK, unpairedAccess)
+    }
+
+    /**
+     * Refuses the server's activation and closes the connection.
+     *
+     * The goodbye names the reason, so the server knows whether to pair or
+     * to stay away.
+     */
+    private fun refuseActivation(reason: String) {
+        sendJson(MessageType.CLIENT_GOODBYE, ClientGoodbyePayload(reason = reason))
+        currentState = currentState.copy(
+            phase = SessionPhase.CLOSED,
+            streaming = false,
+            error = "The server asked for more than the pairing allows",
+        )
+        publish()
+        transport.close()
+    }
+
     /** Sends the `client/goodbye` message and closes the transport. */
     public fun sendGoodbye(reason: String) {
         sendJson(MessageType.CLIENT_GOODBYE, ClientGoodbyePayload(reason = reason))
@@ -1115,6 +1212,9 @@ public class SourceSession(
 
         /** The activity that says the server wants to play audio on the client. */
         public const val ACTIVITY_PLAYBACK: String = "playback"
+
+        /** The activity that says the server wants to pair with the client. */
+        public const val ACTIVITY_PAIRING: String = "pairing"
 
         /**
          * How many rounds one pairing attempt may run.

@@ -6,6 +6,7 @@ import com.sendspin.protocol.crypto.X25519
 import com.sendspin.protocol.noise.Kkpsk2Handshake
 import com.sendspin.protocol.noise.NoiseTransport
 import com.sendspin.protocol.protocol.AudioChunk
+import com.sendspin.protocol.protocol.ClientGoodbyePayload
 import com.sendspin.protocol.protocol.ClientHelloPayload
 import com.sendspin.protocol.protocol.ClientInitPayload
 import com.sendspin.protocol.protocol.ClientPairInitPayload
@@ -98,6 +99,48 @@ class SourceSessionTest {
         return Triple(session, transport, server)
     }
 
+    /**
+     * Runs the handshake over a pairing record.
+     *
+     * A server may only activate roles on a connection that a pairing
+     * opened, because the captured audio must not reach a server that has
+     * not proved itself. So the tests that activate the source role use
+     * this one.
+     */
+    private fun pairedHandshake(): Triple<SourceSession, TestTransport, TestServer> {
+        val transport = TestTransport()
+        val keys = TestKeyStore()
+        val session = SourceSession(
+            keys = keys,
+            transport = transport,
+            clock = clock,
+            listener = TestListener(),
+            configuration = SourceSessionConfiguration(
+                clientName = "Test Phone",
+                suite = NoiseSuite.AES_GCM_SHA256,
+            ),
+        )
+        val server = TestServer(keys, transport)
+        val psk = ByteArray(32) { (it + 50).toByte() }
+        keys.putLongTerm(
+            PskRecord(
+                serverId = server.serverId,
+                psk = psk,
+                serverName = "Living Room",
+                category = PskCategory.LONG_TERM,
+            ),
+        )
+        server.namedPskId = SendspinPsk.id(psk)
+        server.namedCategory = "lt"
+        server.namedPsk = psk
+        session.start()
+        server.startHandshake(transport.texts.last())
+        session.onTextMessage(server.serverInitText)
+        session.onTextMessage(server.firstHandshakeMessage())
+        server.finishHandshake(transport.texts.last())
+        return Triple(session, transport, server)
+    }
+
     /** Sends the server hello, so the client answers with its own. */
     private fun sayHello(session: SourceSession, server: TestServer) {
         session.onBinaryMessage(
@@ -179,7 +222,7 @@ class SourceSessionTest {
 
     @Test
     fun `the clock converges and the session reports itself available`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
 
@@ -192,7 +235,7 @@ class SourceSessionTest {
 
     @Test
     fun `the session streams audio after the server asks for it`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
         convergeClock(session, server)
@@ -218,7 +261,7 @@ class SourceSessionTest {
 
     @Test
     fun `a start command opens the stream without any audio`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
         convergeClock(session, server)
@@ -243,7 +286,7 @@ class SourceSessionTest {
 
     @Test
     fun `a start command before the clock settles opens the stream later`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
 
@@ -270,7 +313,7 @@ class SourceSessionTest {
 
     @Test
     fun `a stop command drops a start that waits for the clock`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
 
@@ -297,7 +340,7 @@ class SourceSessionTest {
 
     @Test
     fun `the session does not stream before the server asks for it`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
         convergeClock(session, server)
@@ -310,7 +353,7 @@ class SourceSessionTest {
 
     @Test
     fun `the stream ends when the server stops it`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
         convergeClock(session, server)
@@ -335,7 +378,7 @@ class SourceSessionTest {
 
     @Test
     fun `the stream ends when the source role is removed`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
         convergeClock(session, server)
@@ -360,7 +403,7 @@ class SourceSessionTest {
 
     @Test
     fun `the stream format is announced when the stream opens`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
         convergeClock(session, server)
@@ -382,7 +425,7 @@ class SourceSessionTest {
 
     @Test
     fun `the audio chunk carries the server time of the first sample`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
         convergeClock(session, server)
@@ -486,7 +529,7 @@ class SourceSessionTest {
 
     @Test
     fun `the session survives a clock poll and audio at the same time`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
         activateSource(session, server)
 
@@ -556,15 +599,92 @@ class SourceSessionTest {
     }
 
     @Test
-    fun `the session sends a goodbye when it is asked to stop`() {
+    fun `the roles are dropped when the connection can no longer carry them`() {
+        val (session, transport, server) = pairedHandshake()
+        sayHello(session, server)
+        activateSource(session, server)
+        assertEquals(listOf("source@v1"), session.state.activeRoles)
+
+        // The server re-keys the session onto the Sentinel key, which is what
+        // a code pairing does. The session is then on a connection that
+        // cannot carry roles.
+        session.onBinaryMessage(
+            server.startRehandshake(SendspinPsk.SENTINEL_ID, "sn"),
+        )
+        val answer = server.nextJson(MessageType.NOISE_HANDSHAKE)
+        server.finishRehandshake(answer, SendspinPsk.SENTINEL)
+
+        // The server leaves the roles out, and the client has to forget the
+        // ones it had.
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_ACTIVATE,
+                ServerActivatePayload(activities = listOf("pairing"), activeRoles = null),
+            ),
+        )
+        assertEquals(emptyList<String>(), session.state.activeRoles)
+        assertNotNull(transport)
+    }
+
+    @Test
+    fun `the server is refused when it asks for the audio without a pairing`() {
         val (session, transport, server) = handshake()
+        sayHello(session, server)
+
+        // The connection is on the Sentinel key, and the client admits no
+        // unpaired access. The server may not ask for the audio.
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_ACTIVATE,
+                ServerActivatePayload(
+                    activities = listOf("playback"),
+                    activeRoles = listOf("source@v1"),
+                ),
+            ),
+        )
+        val goodbye = codec.decode<ClientGoodbyePayload>(
+            MessageType.CLIENT_GOODBYE,
+            server.nextJson(MessageType.CLIENT_GOODBYE),
+        )
+        assertEquals("pairing_required", goodbye.reason)
+        assertEquals(SessionPhase.CLOSED, session.state.phase)
+        assertNotNull(transport)
+    }
+
+    @Test
+    fun `the server is refused when it declares an activity set that is not allowed`() {
+        val (session, transport, server) = pairedHandshake()
+        sayHello(session, server)
+
+        // A paired connection allows the playback activity and nothing else
+        // beside it.
+        session.onBinaryMessage(
+            server.encryptJson(
+                MessageType.SERVER_ACTIVATE,
+                ServerActivatePayload(
+                    activities = listOf("playback", "pairing"),
+                    activeRoles = listOf("source@v1"),
+                ),
+            ),
+        )
+        val goodbye = codec.decode<ClientGoodbyePayload>(
+            MessageType.CLIENT_GOODBYE,
+            server.nextJson(MessageType.CLIENT_GOODBYE),
+        )
+        assertEquals("unauthorized", goodbye.reason)
+        assertEquals(SessionPhase.CLOSED, session.state.phase)
+        assertNotNull(transport)
+    }
+
+    @Test
+    fun `the session sends a goodbye when it is asked to stop`() {        val (session, transport, server) = handshake()
         session.sendGoodbye("user_request")
         assertEquals(SessionPhase.CLOSED, session.state.phase)
     }
 
     @Test
     fun `the session streams when the server declares no activities`() {
-        val (session, transport, server) = handshake()
+        val (session, transport, server) = pairedHandshake()
         sayHello(session, server)
 
         // Music Assistant holds a source with no activities. The phone is
@@ -631,7 +751,6 @@ class SourceSessionTest {
         val keys = TestKeyStore()
         val (session, transport, server) = handshake(keys = keys)
         sayHello(session, server)
-        activateSource(session, server)
 
         // The server runs a new handshake in the channel, to swap the keys.
         // The prologue is the hash of the previous handshake.
@@ -655,6 +774,10 @@ class SourceSessionTest {
 
         // The session is now on the long-term key, so it counts as paired.
         assertTrue(session.state.paired)
+
+        // The server may now activate the source role.
+        activateSource(session, server)
+        assertEquals(listOf("source@v1"), session.state.activeRoles)
     }
 
     @Test
