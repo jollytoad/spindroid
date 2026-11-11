@@ -34,7 +34,7 @@ sends every sample it captures, and the browser plays what the phone plays.
 | The clock error settles below 1 ms in the status panel | Done on the phone. The panel showed 723 to 996 µs. The filter settles at a few tens of microseconds over a local socket. |
 | The app survives a screen-off and a network drop. It reconnects on its own. | Open. The phone keeps the port open and the advertisement up, so the server can dial in again. The server has to make the new connection, and that is not proven on the phone. |
 | The app uses AES-GCM by default and falls back to ChaCha-Poly on a device without hardware AES | Written. The benchmark picks the suite, and the client offers the other one when the server refuses. |
-| The user can pick the player that plays the phone, from the phone | Open. The sign in works on the phone, and the two commands that route the audio are proven against the server. The picker itself is not written. |
+| The user can pick the player that plays the phone, from the phone | Done on the phone. The picker lists the players that the server knows about, and a tap points one at the phone. The server answered with the phone's source on the chosen player. |
 
 | Deliverable | Where |
 | --- | --- |
@@ -213,6 +213,27 @@ Several things were harder than they looked. Most are now covered by a test.
     refuses the connection by default, and the app has to allow cleartext
     traffic. The first sign in failed with a message that named nothing,
     because the client swallowed the reason. The message now carries it.
+
+24. **The server answers a choice of player with nothing, and it answers
+    the same way when it did nothing at all.** The command that points a
+    player at a source returns nothing, also when the player does not
+    exist and when the player cannot be reached. So the app cannot read
+    the answer of the command. It reads the list of players again, and
+    looks at the source that the chosen player holds.
+
+25. **The server cannot play a source that the phone does not send.** A
+    choice of player fails with an internal error when the phone is not
+    connected, and the message says nothing about the cause. The server
+    also keeps the phone in its list of devices after the phone goes
+    away, so the list does not tell whether the sound is live. The
+    session does, and the picker uses that to say what is wrong.
+
+26. **The server lists the phone as a player that only takes sound in.**
+    The list of players holds the devices that make sound and the
+    devices that take sound in, and the phone is one of the second. The
+    picker shows only the first kind. The name that the server uses for
+    the phone is the client's own id, which the phone built, so the
+    phone writes the address of its own source without asking.
 
 ### The second implementation
 
@@ -420,6 +441,13 @@ the server over it.
 5. List the players with `players/all`, and point one at the phone with
    `players/cmd/select_source`. The source is the phone's own client id,
    which the phone already knows.
+6. Show one row for each place the sound can go. A player that is a
+   member of a group is not a row of its own, and a player that the
+   server cannot reach says so.
+7. Read the list again after every choice. The server answers the choice
+   with nothing, and it answers the same way when it did nothing at all.
+8. Refuse the choice when the phone is not connected. The server cannot
+   play a source that the phone does not send.
 
 A guest account is enough for this. The guest role holds `players.read` and
 `players.control`, and no more than that is needed.
@@ -440,7 +468,9 @@ A guest account is enough for this. The guest role holds `players.read` and
 7. The operator pairs the phone by typing six digits, instead of pasting a
    hundred and eight characters.
 8. The operator picks the player that plays the phone, from the phone, after
-   signing in.
+   signing in. Done on the phone. The picker listed the three players that the
+   server has, and a tap pointed the chosen one at the phone. The server went
+   to `playing` with the phone's source on it.
 
 ## Risks
 

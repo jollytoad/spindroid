@@ -172,6 +172,13 @@ These need a phone and a running server.
 5. The phone can list the players, and picking one makes the server play
    the phone's audio on it. The phone's own id is the name that the server
    knows it by, so the phone writes the source URI itself.
+6. The picker shows one row for each place the sound can go. A player
+   that is a member of a group is not a row of its own, and a player
+   that the server cannot reach says so.
+7. The picker refuses to work when the phone is not connected, because
+   the server has no sound to give to a player.
+8. A player that was playing the phone stops playing it when the operator
+   picks another one.
 
 ## Test data
 
