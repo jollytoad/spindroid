@@ -3,9 +3,10 @@ package com.sendspin.protocol.crypto
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-/** SHA-256 and HMAC-SHA-256, on top of the platform providers. */
+/** SHA-256, SHA-512, and their HMACs, on top of the platform providers. */
 public object Hashing {
     private const val ALGORITHM = "SHA-256"
+    private const val ALGORITHM_512 = "SHA-512"
 
     public fun sha256(data: ByteArray): ByteArray =
         java.security.MessageDigest.getInstance(ALGORITHM).digest(data)
@@ -13,6 +14,23 @@ public object Hashing {
     public fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(key, ALGORITHM))
+        return mac.doFinal(data)
+    }
+
+    /**
+     * SHA-512, which the CPace construction needs.
+     *
+     * The Noise layer only ever needs SHA-256. The pairing code exchange
+     * needs SHA-512, and the digest is a different length, so it gets its
+     * own call rather than a parameter.
+     */
+    public fun sha512(data: ByteArray): ByteArray =
+        java.security.MessageDigest.getInstance(ALGORITHM_512).digest(data)
+
+    /** HMAC-SHA-512, which the CPace confirmation tags need. */
+    public fun hmacSha512(key: ByteArray, data: ByteArray): ByteArray {
+        val mac = Mac.getInstance("HmacSHA512")
+        mac.init(SecretKeySpec(key, ALGORITHM_512))
         return mac.doFinal(data)
     }
 
