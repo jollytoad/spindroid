@@ -79,6 +79,8 @@ architecture.
 - [Toolchain](toolchain.md) - the build tools, the Android SDK setup, and the
   commands for each task.
 - [Testing strategy](testing-strategy.md) - how each part gets verified.
+- [BDD testing](bdd-testing.md) - the Gherkin and Cucumber harness, the local
+  runs, and the CI stages.
 
 ## Sources
 
