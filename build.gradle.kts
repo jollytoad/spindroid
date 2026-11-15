@@ -13,7 +13,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:9.5.0")
+        classpath("com.android.tools.build:gradle:9.5.1")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.21")
         classpath("com.google.devtools.ksp:symbol-processing-gradle-plugin:2.3.13")
         // The Compose compiler has to match the Kotlin version that compiles
