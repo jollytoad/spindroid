@@ -29,6 +29,10 @@ public class MusicAssistantClient(
     )
     private val playersAllAdapter = moshi.adapter(PlayersAllRequest::class.java)
     private val selectSourceAdapter = moshi.adapter(SelectSourceRequest::class.java)
+    private val playerSetupAdapter = moshi.adapter(PlayerSetupRequest::class.java)
+    private val flowIdAdapter = moshi.adapter(FlowIdRequest::class.java)
+    private val flowSubmitAdapter = moshi.adapter(FlowSubmitRequest::class.java)
+    private val setupStepAdapter = moshi.adapter(SetupFlowStep::class.java)
 
     /**
      * Signs in to the server.
@@ -142,6 +146,117 @@ public class MusicAssistantClient(
     }
 
     /**
+     * Starts the setup flow of a player.
+     *
+     * Music Assistant pairs a device through this flow. The flow returns
+     * the first step, which is usually a form.
+     *
+     * The server may wait while the device and the server exchange the
+     * pairing messages, so this command allows more time than a command
+     * that only reads.
+     *
+     * @param token the token of the signed in account
+     * @param playerId the player that needs the setup
+     * @return the first step, or the reason the server gave
+     */
+    public fun startPlayerSetup(token: String, playerId: String): SetupFlowResult {
+        val request = PlayerSetupRequest(
+            messageId = UUID.randomUUID().toString(),
+            command = COMMAND_PLAYER_SETUP,
+            args = PlayerSetupArgs(playerId = playerId),
+        )
+        return setupFlowCommand(playerSetupAdapter.toJson(request), token, SETUP_TIMEOUT_MILLIS)
+    }
+
+    /**
+     * Answers the form of a running flow.
+     *
+     * @param token the token of the signed in account
+     * @param flowId the flow that holds the form
+     * @param values the answer, by field name
+     * @return the next step, or the reason the server gave
+     */
+    public fun submitSetupFlow(
+        token: String,
+        flowId: String,
+        values: Map<String, String>,
+    ): SetupFlowResult {
+        val request = FlowSubmitRequest(
+            messageId = UUID.randomUUID().toString(),
+            command = COMMAND_FLOW_SUBMIT,
+            args = FlowSubmitArgs(flowId = flowId, values = values),
+        )
+        return setupFlowCommand(flowSubmitAdapter.toJson(request), token, SETUP_TIMEOUT_MILLIS)
+    }
+
+    /**
+     * Reads the current step of a running flow.
+     *
+     * The client calls this while the server works on a progress step,
+     * because the server sends no event when the step changes.
+     *
+     * @param token the token of the signed in account
+     * @param flowId the flow to read
+     * @return the current step, or the reason the server gave
+     */
+    public fun getSetupFlow(token: String, flowId: String): SetupFlowResult {
+        val request = FlowIdRequest(
+            messageId = UUID.randomUUID().toString(),
+            command = COMMAND_FLOW_GET,
+            args = FlowIdArgs(flowId = flowId),
+        )
+        return setupFlowCommand(flowIdAdapter.toJson(request), token, TIMEOUT_MILLIS)
+    }
+
+    /**
+     * Aborts a running flow.
+     *
+     * The app aborts a flow that it cannot finish, so the server does not
+     * keep the flow open.
+     *
+     * @param token the token of the signed in account
+     * @param flowId the flow to abort
+     * @return nothing, or the reason the server gave
+     */
+    public fun abortSetupFlow(token: String, flowId: String): SetupActionResult {
+        val request = FlowIdRequest(
+            messageId = UUID.randomUUID().toString(),
+            command = COMMAND_FLOW_ABORT,
+            args = FlowIdArgs(flowId = flowId),
+        )
+        val body = flowIdAdapter.toJson(request).toByteArray(Charsets.UTF_8)
+        return try {
+            post(body, token)
+            SetupActionResult.Success
+        } catch (exception: ApiException) {
+            SetupActionResult.Failure("The server did not answer: ${exception.reason}")
+        } catch (exception: IOException) {
+            SetupActionResult.Failure("The server did not answer: ${exception.message}")
+        }
+    }
+
+    /** Sends a flow command and reads the next step. */
+    private fun setupFlowCommand(
+        request: String,
+        token: String,
+        timeoutMillis: Int,
+    ): SetupFlowResult {
+        val answer = try {
+            post(request.toByteArray(Charsets.UTF_8), token, timeoutMillis)
+        } catch (exception: ApiException) {
+            return SetupFlowResult.Failure(reasonOf(exception))
+        } catch (exception: IOException) {
+            return SetupFlowResult.Failure("The server did not answer: ${exception.message}")
+        }
+        val step = try {
+            setupStepAdapter.fromJson(answer)
+        } catch (exception: Exception) {
+            null
+        } ?: return SetupFlowResult.Failure("The server sent a setup step that the app could not read")
+        return SetupFlowResult.Step(step)
+    }
+
+    /**
      * The reason that the server gave.
      *
      * The server answers a refusal with plain text, but the login command
@@ -163,10 +278,15 @@ public class MusicAssistantClient(
      * @param body the encoded command
      * @param token the token to authenticate with, or nothing for the
      *   commands that need no account
+     * @param timeoutMillis how long the command may take
      * @return the raw answer
      * @throws IOException the server refused the command, and said why
      */
-    private fun post(body: ByteArray, token: String?): String {
+    private fun post(
+        body: ByteArray,
+        token: String?,
+        timeoutMillis: Int = TIMEOUT_MILLIS,
+    ): String {
         val connection = URL("$baseUrl$PATH_API").openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "POST"
@@ -175,8 +295,8 @@ public class MusicAssistantClient(
             if (token != null) {
                 connection.setRequestProperty("Authorization", "Bearer $token")
             }
-            connection.connectTimeout = TIMEOUT_MILLIS
-            connection.readTimeout = TIMEOUT_MILLIS
+            connection.connectTimeout = timeoutMillis
+            connection.readTimeout = timeoutMillis
             connection.outputStream.use { it.write(body) }
             val status = connection.responseCode
             // The API answers with the result of the command, and the result
@@ -211,11 +331,32 @@ public class MusicAssistantClient(
         /** The name of the command that points a player at a source. */
         public const val COMMAND_SELECT_SOURCE: String = "players/cmd/select_source"
 
+        /** The name of the command that starts the setup flow of a player. */
+        public const val COMMAND_PLAYER_SETUP: String = "config/players/setup"
+
+        /** The name of the command that answers a setup form. */
+        public const val COMMAND_FLOW_SUBMIT: String = "config/flows/submit"
+
+        /** The name of the command that reads the current step of a flow. */
+        public const val COMMAND_FLOW_GET: String = "config/flows/get"
+
+        /** The name of the command that aborts a flow. */
+        public const val COMMAND_FLOW_ABORT: String = "config/flows/abort"
+
         /** The login provider that takes a name and a password. */
         public const val PROVIDER_BUILTIN: String = "builtin"
 
         /** How long the app waits for the server, in milliseconds. */
         private const val TIMEOUT_MILLIS = 10_000
+
+        /**
+         * How long a setup step may take, in milliseconds.
+         *
+         * Music Assistant waits for the device while the pairing runs, so
+         * a setup command can take much longer than a command that only
+         * reads.
+         */
+        private const val SETUP_TIMEOUT_MILLIS = 65_000
     }
 }
 
