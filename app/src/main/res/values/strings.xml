@@ -21,6 +21,7 @@
     <string name="title_pairing">Pairing</string>
     <string name="pairing_explanation">Paste this token into Music Assistant, on the screen where a new input is paired. The token never changes, so the same one works for every server.</string>
     <string name="pairing_done">The phone is paired. It shows up under Live Inputs in Music Assistant, where the user picks it as the input for a player or a group.</string>
+    <string name="pairing_paired">The phone is paired with Music Assistant.</string>
     <string name="pairing_code_instruction">Type this code in Music Assistant.</string>
     <string name="pairing_code_where">Waiting for Music Assistant. Open the Sendspin provider in Music Assistant, pick this phone, then choose Pairing code.</string>
     <string name="label_pairing_token">Pairing token</string>
@@ -93,6 +94,8 @@
     <string name="notification_idle">SendSpin is ready</string>
     <string name="notification_text">No server yet</string>
     <string name="notification_stop">Stop</string>
+    <string name="notification_pairing">Pairing with Music Assistant</string>
+    <string name="notification_pairing_text">Waiting for Music Assistant to pair the phone</string>
 
     <!-- The permission messages. -->
     <string name="error_record_permission">The app needs the record permission to capture the system audio.</string>

@@ -17,9 +17,11 @@ import com.sendspin.sender.MainActivity
 import com.sendspin.sender.R
 import com.sendspin.sender.capture.AudioCapture
 import com.sendspin.sender.capture.CaptureStatusHolder
+import com.sendspin.sender.capture.SilentCapture
 import com.sendspin.sender.capture.SystemAudioCapture
 import com.sendspin.sender.discovery.ServiceAdvertiser
 import com.sendspin.sender.net.InboundServer
+import com.sendspin.sender.session.PairingServiceHolder
 import com.sendspin.sender.session.SessionStateHolder
 import com.sendspin.sender.storage.EncryptedKeyStore
 import com.sendspin.sender.storage.Settings
@@ -41,6 +43,9 @@ class SendSpinService : Service() {
     private var capture: AudioCapture? = null
     private var mediaProjection: MediaProjection? = null
 
+    /** Whether the service listens only, so a server can pair the phone. */
+    private var pairing = false
+
     override fun onCreate() {
         super.onCreate()
         settings = Settings(this)
@@ -57,6 +62,7 @@ class SendSpinService : Service() {
                 return START_NOT_STICKY
             }
 
+            ACTION_PAIR -> startPairingListener()
             else -> startEverything(intent)
         }
         // The capture needs the permission and the media projection consent
@@ -88,7 +94,8 @@ class SendSpinService : Service() {
      */
     private fun startEverything(intent: Intent?) {
         if (inboundServer != null) return
-        startForegroundWithType()
+        pairing = false
+        startForegroundWithType(ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         publishRunning(true)
 
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
@@ -112,7 +119,37 @@ class SendSpinService : Service() {
         CaptureStatusHolder.publishRunning(true)
         CaptureStatusHolder.publishError(null)
 
-        // The app waits for the server to dial it, so it advertises itself.
+        startListening(captureSource)
+    }
+
+    /**
+     * Starts only the listener and the advertisement.
+     *
+     * The pairing runs before the user allows the screen capture. Music
+     * Assistant has to find the phone and connect to it for the pairing, so
+     * the socket and the advertisement run without a capture. A silent
+     * capture keeps the listener's contract.
+     */
+    private fun startPairingListener() {
+        if (inboundServer != null) return
+        pairing = true
+        PairingServiceHolder.publishError(null)
+        startForegroundWithType(ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        startListening(SilentCapture())
+    }
+
+    /**
+     * Starts the server that waits for Music Assistant.
+     *
+     * The advertisement starts only once the socket listens. A server that
+     * reads the advertisement and dials at once would otherwise find a
+     * closed port.
+     *
+     * @param captureSource where the audio comes from, or a silent capture
+     *   when the service only pairs
+     */
+    private fun startListening(captureSource: AudioCapture) {
+        SessionStateHolder.reset()
         val inbound = InboundServer(
             keys = keys,
             suite = settings.cipherSuite,
@@ -130,13 +167,11 @@ class SendSpinService : Service() {
                     // The status panel shows this, so the user knows why the
                     // phone waits for a server that never comes.
                     CaptureStatusHolder.publishError(message)
+                    if (pairing) PairingServiceHolder.publishError(message)
                 }
             },
         )
         inboundServer = inbound
-        // The advertisement starts only once the socket listens. A server
-        // that reads the advertisement and dials at once would otherwise
-        // find a closed port.
         inbound.start {
             if (inboundServer !== inbound) return@start
             val advertiser = ServiceAdvertiser(
@@ -145,7 +180,15 @@ class SendSpinService : Service() {
                 ServiceAdvertiser.PORT,
             )
             advertiser.start(
-                onFailed = { message -> Log.e(TAG, "The advertisement failed: $message") },
+                onRegistered = {
+                    // The pairing manager waits for the advertisement, because
+                    // Music Assistant cannot find the phone before it runs.
+                    if (pairing) PairingServiceHolder.publishRunning(true)
+                },
+                onFailed = { message ->
+                    Log.e(TAG, "The advertisement failed: $message")
+                    if (pairing) PairingServiceHolder.publishError(message)
+                },
             )
             this.advertiser = advertiser
         }
@@ -162,14 +205,16 @@ class SendSpinService : Service() {
         CaptureStatusHolder.reset()
         mediaProjection?.stop()
         mediaProjection = null
+        pairing = false
+        PairingServiceHolder.reset()
         publishRunning(false)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     /** Puts the service in the foreground, with the type the capture needs. */
-    private fun startForegroundWithType() {
-        startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+    private fun startForegroundWithType(type: Int) {
+        startForeground(NOTIFICATION_ID, buildNotification(), type)
     }
 
     /** Updates the notification, so it shows the current state. */
@@ -193,6 +238,7 @@ class SendSpinService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val title = when {
+            pairing -> getString(R.string.notification_pairing)
             state == null -> getString(R.string.notification_idle)
             state.streaming -> getString(R.string.notification_streaming)
             state.serverRequestedAudio -> getString(R.string.notification_waiting)
@@ -200,7 +246,10 @@ class SendSpinService : Service() {
                 getString(R.string.notification_disconnected)
             else -> getString(R.string.notification_connecting)
         }
-        val text = state?.serverName ?: getString(R.string.notification_text)
+        val text = when {
+            pairing -> getString(R.string.notification_pairing_text)
+            else -> state?.serverName ?: getString(R.string.notification_text)
+        }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
@@ -231,11 +280,28 @@ class SendSpinService : Service() {
         /** The action that stops the service. */
         const val ACTION_STOP = "com.sendspin.sender.STOP"
 
+        /** The action that listens without a capture, so a server can pair the phone. */
+        const val ACTION_PAIR = "com.sendspin.sender.PAIR"
+
         /** The extra that holds the consent result of the media projection. */
         const val EXTRA_RESULT_CODE = "result_code"
 
         /** The extra that holds the consent data of the media projection. */
         const val EXTRA_RESULT_DATA = "result_data"
+
+        /**
+         * Starts the listener without a capture.
+         *
+         * Music Assistant has to connect to the phone before it can pair
+         * it. The listener therefore starts before the user allows the
+         * screen capture.
+         *
+         * @param context the context that starts the service
+         */
+        fun startPairing(context: Context) {
+            val intent = Intent(context, SendSpinService::class.java).setAction(ACTION_PAIR)
+            context.startForegroundService(intent)
+        }
 
         /**
          * Starts the service.

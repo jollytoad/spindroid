@@ -30,6 +30,16 @@ object SessionStateHolder {
         mutableState.value = newState
     }
 
+    /**
+     * Forgets the last state.
+     *
+     * A new session starts with no server, and the screen must not show the
+     * names and the pairing of a session that has ended.
+     */
+    fun reset() {
+        mutableState.value = SourceSessionState()
+    }
+
     /** Says whether the service is running. */
     fun publishRunning(isRunning: Boolean) {
         mutableRunning.value = isRunning

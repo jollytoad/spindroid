@@ -31,3 +31,16 @@ Feature: SendSpin Source Role
     And these buttons are presented:
       | Sign in |
       | Cancel  |
+
+  @requires-music-assistant
+  @requires-administrator
+  Scenario: Signing in pairs the phone automatically
+    Given a fresh install
+    And a Music Assistant is present on the network
+    And a Music Assistant administrator account is available
+    And the phone is not paired with the Music Assistant
+    When the app opens
+    And "Sign into Music Assistant" is chosen
+    And the sign in form is filled with the Music Assistant account
+    And "Sign in" is pressed
+    Then the pairing section says that the phone is paired

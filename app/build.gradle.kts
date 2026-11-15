@@ -9,6 +9,7 @@ import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import java.io.ByteArrayOutputStream
+import java.util.Properties
 import javax.inject.Inject
 
 plugins {
@@ -33,7 +34,8 @@ android {
 
     sourceSets {
         // The Gherkin files stay in one place. They are assets of the test APK,
-        // never of the app APK.
+        // never of the app APK. The account file is not an asset: it holds a
+        // password, and Gradle reads it for the device command instead.
         getByName("androidTest").assets.srcDir(rootProject.file("bdd"))
     }
 
@@ -67,6 +69,13 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    androidResources {
+        // The account file sits beside the Gherkin files, and the suite task
+        // reads it for the device command. It is not an asset, because it
+        // holds a password.
+        ignoreAssetsPatterns.add("credentials.properties")
     }
 
     buildFeatures {
@@ -118,6 +127,11 @@ dependencies {
  * need a Music Assistant are tagged `@requires-music-assistant`, so
  * `-Pbdd.tags="not @requires-music-assistant"` runs the suite on a network
  * without one. Cucumber reports no tests in that case, which passes.
+ *
+ * The scenarios that sign in need an account. The task reads it from
+ * `bdd/credentials.properties`, which is not in the repository, and
+ * `-Pbdd.ma.user` and `-Pbdd.ma.password` override the file. A run without
+ * an account skips those scenarios, so the suite still passes.
  */
 abstract class RunBddTask : DefaultTask() {
     @get:InputFile
@@ -128,6 +142,21 @@ abstract class RunBddTask : DefaultTask() {
     @get:Optional
     abstract val tags: Property<String>
 
+    /** The account file, or nothing when the machine has none. */
+    @get:InputFile
+    @get:Optional
+    abstract val credentialsFile: RegularFileProperty
+
+    /** The user name that overrides the account file, if any. */
+    @get:Input
+    @get:Optional
+    abstract val user: Property<String>
+
+    /** The password that overrides the account file, if any. */
+    @get:Input
+    @get:Optional
+    abstract val password: Property<String>
+
     @get:Inject
     abstract val execOperations: ExecOperations
 
@@ -135,11 +164,24 @@ abstract class RunBddTask : DefaultTask() {
     fun runSuite() {
         val output = ByteArrayOutputStream()
         val filter = tags.orNull?.takeIf { it.isNotBlank() }
+        val stored = Properties().apply {
+            credentialsFile.orNull?.asFile?.inputStream()?.use { load(it) }
+        }
+        val accountUser = user.orNull?.takeIf { it.isNotBlank() }
+            ?: stored.getProperty("ma.user")?.takeIf { it.isNotBlank() }
+        val accountPassword = password.orNull?.takeIf { it.isNotBlank() }
+            ?: stored.getProperty("ma.password")?.takeIf { it.isNotBlank() }
         val command = buildString {
             append("am instrument -w")
             if (filter != null) {
                 append(" -e tags ")
                 append(shellQuote(filter))
+            }
+            if (accountUser != null && accountPassword != null) {
+                append(" -e bdd.user ")
+                append(shellQuote(accountUser))
+                append(" -e bdd.password ")
+                append(shellQuote(accountPassword))
             }
             append(" com.sendspin.sender.test/io.cucumber.android.runner.CucumberAndroidJUnitRunner")
         }
@@ -169,4 +211,10 @@ tasks.register<RunBddTask>("runBdd") {
     dependsOn("installDebug", "installDebugAndroidTest")
     adb.set(androidComponents.sdkComponents.adb)
     tags.set(providers.gradleProperty("bdd.tags"))
+    user.set(providers.gradleProperty("bdd.ma.user"))
+    password.set(providers.gradleProperty("bdd.ma.password"))
+    val credentials = rootProject.file("bdd/credentials.properties")
+    if (credentials.exists()) {
+        credentialsFile.set(credentials)
+    }
 }
