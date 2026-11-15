@@ -8,7 +8,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.sendspin.sender.bdd.support.ComposeRuleHolder
-import com.sendspin.sender.bdd.support.FakeDiscoveryHolder
+import com.sendspin.sender.bdd.support.RealServer
 import io.cucumber.datatable.DataTable
 import io.cucumber.java.en.And
 import io.cucumber.java.en.Then
@@ -17,12 +17,12 @@ import io.cucumber.java.en.When
 /**
  * The sign in scenario.
  *
- * The scenario states what the app must do, so the steps below state it
- * too. The sign in page is not built yet, and these steps fail until it is.
- *
  * The first page offers the sign in as an option. The page that the option
  * opens holds the form, and the form holds the fields and the two buttons
  * that the scenario names.
+ *
+ * The address in the Server field is the one that the real search found,
+ * because the app fills the field from its own search.
  */
 class SignInSteps {
     private val composeRule get() = ComposeRuleHolder.current.composeRule
@@ -63,14 +63,19 @@ class SignInSteps {
     /**
      * The address comes from the search, so the user does not type it.
      *
-     * The field holds the address that the fake search published, and that
-     * is the address that a real search would find too.
+     * The app searches for the server in parallel with this step, so the
+     * field can be empty for a moment. The step waits for the app to fill
+     * it with the address that the real search found.
      */
     @And("the Server field is pre-populated with the Music Assistant server URL")
     fun theServerFieldIsPrePopulatedWithTheMusicAssistantUrl() {
-        val server = FakeDiscoveryHolder.discovery.server.value
+        val server = RealServer.found
             ?: error("The scenario needs a Music Assistant on the network.")
-        composeRule.onNode(hasSetTextAction() and hasText(server.url)).assertIsDisplayed()
+        val field = hasSetTextAction() and hasText(server.url)
+        composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(field).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNode(field).assertIsDisplayed()
     }
 
     /** The buttons are the two ways out of the form. */

@@ -22,6 +22,7 @@ import com.sendspin.protocol.crypto.X25519
 import com.sendspin.protocol.pairing.PairingToken
 import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.mass.MassAccountManager
+import com.sendspin.sender.mass.MassDiscovery
 import com.sendspin.sender.mass.MassPlayerManager
 import com.sendspin.sender.mass.MusicAssistantDiscovery
 import com.sendspin.sender.service.SendSpinService
@@ -103,7 +104,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         keys = EncryptedKeyStore(this)
         accounts = MassAccountManager(this)
-        discovery = AppContainer.discoveryFactory(this)
+        discovery = MassDiscovery(this)
         players = MassPlayerManager(this, accounts)
 
         setContent {

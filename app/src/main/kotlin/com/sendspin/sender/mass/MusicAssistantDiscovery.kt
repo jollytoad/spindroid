@@ -18,8 +18,7 @@ data class DiscoveredServer(
  * Finds Music Assistant on the local network.
  *
  * The screen shows what the search found, and the search outlives a single
- * call, so the result is a state flow. Tests supply a fake
- * implementation through [com.sendspin.sender.AppContainer].
+ * call, so the result is a state flow.
  */
 interface MusicAssistantDiscovery {
     /** The server that answered, or null while the search runs. */
