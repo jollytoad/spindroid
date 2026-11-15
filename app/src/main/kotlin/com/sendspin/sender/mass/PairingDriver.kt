@@ -1,5 +1,6 @@
 package com.sendspin.sender.mass
 
+import android.util.Log
 import com.sendspin.mass.MusicAssistantClient
 import com.sendspin.mass.SetupFlowEntry
 import com.sendspin.mass.SetupFlowResult
@@ -45,9 +46,14 @@ class PairingDriver(
         val deadline = now() + OVERALL_TIMEOUT_MILLIS
         var step = when (val started = client.startPlayerSetup(token, playerId)) {
             is SetupFlowResult.Step -> started.step
-            is SetupFlowResult.Failure -> return PairingResult.Failed(started.reason)
+            is SetupFlowResult.Failure -> return failure(started.reason)
         }
         while (true) {
+            Log.i(
+                TAG,
+                "Step ${step.stepId} (${step.type}) entries=${step.entries.map { it.key }} " +
+                    "errors=${step.errors} reason=${step.reason}",
+            )
             if (now() > deadline) {
                 return fail(step, "Music Assistant did not finish the pairing in time.")
             }
@@ -63,7 +69,7 @@ class PairingDriver(
                         )
                     step = when (val submitted = client.submitSetupFlow(token, step.flowId, values)) {
                         is SetupFlowResult.Step -> submitted.step
-                        is SetupFlowResult.Failure -> return PairingResult.Failed(submitted.reason)
+                        is SetupFlowResult.Failure -> return failure(submitted.reason)
                     }
                 }
 
@@ -71,7 +77,7 @@ class PairingDriver(
                     sleep(POLL_MILLIS)
                     step = when (val current = client.getSetupFlow(token, step.flowId)) {
                         is SetupFlowResult.Step -> current.step
-                        is SetupFlowResult.Failure -> return PairingResult.Failed(current.reason)
+                        is SetupFlowResult.Failure -> return failure(current.reason)
                     }
                 }
 
@@ -154,11 +160,24 @@ class PairingDriver(
 
     /** Aborts the flow and reports the reason. */
     private fun fail(step: SetupFlowStep, reason: String): PairingResult {
+        if (isPaired()) return PairingResult.Paired
         if (step.flowId.isNotBlank()) client.abortSetupFlow(token, step.flowId)
         return PairingResult.Failed(reason)
     }
 
+    /**
+     * Reports a failure, or a success when the phone is already paired.
+     *
+     * The server drops a finished flow, so a later read of that flow fails.
+     * The session tells whether the pairing worked, and it is the answer
+     * that the user needs.
+     */
+    private fun failure(reason: String): PairingResult =
+        if (isPaired()) PairingResult.Paired else PairingResult.Failed(reason)
+
     private companion object {
+        const val TAG = "SendSpin"
+
         const val ENTRY_CONNECT_METHOD = "connect_method"
         const val ENTRY_SOURCE_INPUT_ACTION = "source_input_action"
         const val ENTRY_PAIRING_METHOD = "pairing_method"
