@@ -8,8 +8,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,8 +31,21 @@ class MassAccountManager(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mutableState = MutableStateFlow(readState())
 
+    /**
+     * The sign ins that the app made.
+     *
+     * The pairing starts from this flow, because a sign in is the only
+     * moment that the app learns of a new account. The pairing needs the
+     * account, so it cannot read the stored account before the sign in
+     * finishes.
+     */
+    private val mutableSignInEvents = MutableSharedFlow<MassSignInEvent>(extraBufferCapacity = 1)
+
     /** The state of the account. */
     val state: StateFlow<MassAccountState> = mutableState.asStateFlow()
+
+    /** The sign ins that the app made. */
+    val signInEvents: SharedFlow<MassSignInEvent> = mutableSignInEvents.asSharedFlow()
 
     /**
      * The token of the signed in account.
@@ -58,15 +74,25 @@ class MassAccountManager(
             }
             when (result) {
                 is LoginResult.Success -> {
+                    val administrator = result.role == ROLE_ADMIN
                     store.token = result.token
                     store.username = result.username
                     store.displayName = result.displayName
+                    store.role = result.role
                     publish(
                         mutableState.value.copy(
                             signingIn = false,
                             error = null,
                             username = result.username,
                             displayName = result.displayName,
+                            administrator = administrator,
+                        ),
+                    )
+                    mutableSignInEvents.emit(
+                        MassSignInEvent(
+                            serverUrl = serverUrl,
+                            token = result.token,
+                            administrator = administrator,
                         ),
                     )
                 }
@@ -113,6 +139,7 @@ class MassAccountManager(
         serverUrl = store.serverUrl.orEmpty(),
         username = store.username,
         displayName = store.displayName,
+        administrator = store.role == ROLE_ADMIN,
     )
 
     /** Publishes a new state. */
@@ -127,4 +154,9 @@ class MassAccountManager(
      * phone tells two phones apart.
      */
     private fun deviceName(): String = "SendSpin on ${Build.MODEL}"
+
+    private companion object {
+        /** The role that may change the server. */
+        const val ROLE_ADMIN = "admin"
+    }
 }

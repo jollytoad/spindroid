@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sendspin.protocol.crypto.X25519
 import com.sendspin.protocol.pairing.PairingToken
 import com.sendspin.sender.capture.CaptureStatusHolder
+import com.sendspin.sender.mass.AutomaticPairing
 import com.sendspin.sender.mass.MassAccountManager
 import com.sendspin.sender.mass.MassDiscovery
 import com.sendspin.sender.mass.MassPlayerManager
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var accounts: MassAccountManager
     private lateinit var discovery: MusicAssistantDiscovery
     private lateinit var players: MassPlayerManager
+    private lateinit var pairing: AutomaticPairing
 
     /** The message the app shows under the fields. */
     private var message by mutableStateOf<String?>(null)
@@ -106,12 +108,15 @@ class MainActivity : ComponentActivity() {
         accounts = MassAccountManager(this)
         discovery = MassDiscovery(this)
         players = MassPlayerManager(this, accounts)
+        pairing = AutomaticPairing(this, accounts, players.clientId)
+        pairing.start()
 
         setContent {
             val state by SessionStateHolder.state.collectAsStateWithLifecycle()
             val serviceRuns by SessionStateHolder.running.collectAsStateWithLifecycle()
             val captureStatus by CaptureStatusHolder.state.collectAsStateWithLifecycle()
             val account by accounts.state.collectAsStateWithLifecycle()
+            val automaticPairing by pairing.state.collectAsStateWithLifecycle()
             val playerList by players.state.collectAsStateWithLifecycle()
             val foundServer by discovery.server.collectAsStateWithLifecycle()
             val discoveryError by discovery.error.collectAsStateWithLifecycle()
@@ -160,6 +165,7 @@ class MainActivity : ComponentActivity() {
                     message = message,
                     account = account,
                     players = playerList,
+                    automaticPairing = automaticPairing,
                     sourceUri = players.sourceUri,
                     clientId = players.clientId,
                     discoveredServer = foundServer,
@@ -168,7 +174,10 @@ class MainActivity : ComponentActivity() {
                     onDisconnect = { disconnect() },
                     onCopyToken = { copyToken() },
                     onOpenSignIn = { signInPage = true },
-                    onSignOut = { accounts.signOut() },
+                    onSignOut = {
+                        pairing.reset()
+                        accounts.signOut()
+                    },
                     onRefreshPlayers = { players.refresh() },
                     onChoosePlayer = { playerId -> players.choose(playerId) },
                 )
@@ -182,6 +191,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         discovery.stop()
+        pairing.close()
         players.close()
         accounts.close()
         super.onDestroy()

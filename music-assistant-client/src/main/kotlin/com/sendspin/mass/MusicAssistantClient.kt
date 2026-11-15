@@ -83,6 +83,7 @@ public class MusicAssistantClient(
             token = token,
             username = response.user?.username ?: username,
             displayName = response.user?.displayName,
+            role = response.user?.role,
         )
     }
 
@@ -379,11 +380,13 @@ public sealed interface LoginResult {
      * @param token the token that authenticates the later commands
      * @param username the name of the account
      * @param displayName the name the operator gave the account
+     * @param role the role of the account, such as `admin` or `user`
      */
     public data class Success(
         val token: String,
         val username: String,
         val displayName: String?,
+        val role: String? = null,
     ) : LoginResult
 
     /**

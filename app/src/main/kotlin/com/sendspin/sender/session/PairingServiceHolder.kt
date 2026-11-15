@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * The state of the listener that runs only for a pairing.
+ * The state of the listener that waits for a server.
  *
  * The pairing starts before the screen capture, so the service runs in a
  * mode of its own. The screen and the pairing manager need to know when

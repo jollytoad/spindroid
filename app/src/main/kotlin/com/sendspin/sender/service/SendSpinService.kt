@@ -167,7 +167,7 @@ class SendSpinService : Service() {
                     // The status panel shows this, so the user knows why the
                     // phone waits for a server that never comes.
                     CaptureStatusHolder.publishError(message)
-                    if (pairing) PairingServiceHolder.publishError(message)
+                    PairingServiceHolder.publishError(message)
                 }
             },
         )
@@ -183,11 +183,11 @@ class SendSpinService : Service() {
                 onRegistered = {
                     // The pairing manager waits for the advertisement, because
                     // Music Assistant cannot find the phone before it runs.
-                    if (pairing) PairingServiceHolder.publishRunning(true)
+                    PairingServiceHolder.publishRunning(true)
                 },
                 onFailed = { message ->
                     Log.e(TAG, "The advertisement failed: $message")
-                    if (pairing) PairingServiceHolder.publishError(message)
+                    PairingServiceHolder.publishError(message)
                 },
             )
             this.advertiser = advertiser

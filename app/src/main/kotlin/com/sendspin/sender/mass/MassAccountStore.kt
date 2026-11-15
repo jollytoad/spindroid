@@ -46,6 +46,16 @@ class MassAccountStore(
         set(value) = preferences.edit { putString(KEY_DISPLAY_NAME, value) }
 
     /**
+     * The role of the signed in account.
+     *
+     * The role decides whether the phone may pair on its own. Only an
+     * administrator may start the setup flow.
+     */
+    var role: String?
+        get() = preferences.getString(KEY_ROLE, null)
+        set(value) = preferences.edit { putString(KEY_ROLE, value) }
+
+    /**
      * The address of the server.
      *
      * The address is not a secret. It is kept, so the app still knows where
@@ -68,6 +78,7 @@ class MassAccountStore(
             remove(KEY_TOKEN)
             remove(KEY_USERNAME)
             remove(KEY_DISPLAY_NAME)
+            remove(KEY_ROLE)
         }
     }
 
@@ -76,6 +87,7 @@ class MassAccountStore(
         const val KEY_TOKEN = "mass_token"
         const val KEY_USERNAME = "mass_username"
         const val KEY_DISPLAY_NAME = "mass_display_name"
+        const val KEY_ROLE = "mass_role"
         const val KEY_SERVER_URL = "mass_server_url"
     }
 }

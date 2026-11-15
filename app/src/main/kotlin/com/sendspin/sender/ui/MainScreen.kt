@@ -36,6 +36,7 @@ import com.sendspin.protocol.session.SessionPhase
 import com.sendspin.protocol.session.SourceSessionState
 import com.sendspin.sender.R
 import com.sendspin.sender.capture.CaptureStatus
+import com.sendspin.sender.mass.AutomaticPairingState
 import com.sendspin.sender.mass.DiscoveredServer
 import com.sendspin.sender.mass.MassAccountState
 import com.sendspin.sender.mass.MassPlayerState
@@ -58,6 +59,7 @@ fun MainScreen(
     message: String?,
     account: MassAccountState,
     players: MassPlayerState,
+    automaticPairing: AutomaticPairingState,
     sourceUri: String,
     clientId: String,
     discoveredServer: DiscoveredServer?,
@@ -108,6 +110,9 @@ fun MainScreen(
             pairingCode = state.pairingCode,
             serverConnected = state.serverName != null,
             paired = state.paired,
+            automaticPairing = automaticPairing,
+            signedIn = account.signedIn,
+            administrator = account.administrator,
             onCopyToken = onCopyToken,
         )
 
@@ -230,7 +235,13 @@ private fun StartSection(
     }
 }
 
-/** The token that pairs the phone with a server, and the code that does it faster. */
+/**
+ * The pairing of the phone with a server.
+ *
+ * An administrator signs in and the phone pairs on its own, so the user
+ * only reads the result here. An account without that right cannot start
+ * the setup flow, so the token stays visible for the manual pairing.
+ */
 @Composable
 private fun PairingSection(
     modifier: Modifier = Modifier,
@@ -238,11 +249,17 @@ private fun PairingSection(
     pairingCode: String?,
     serverConnected: Boolean,
     paired: Boolean,
+    automaticPairing: AutomaticPairingState,
+    signedIn: Boolean,
+    administrator: Boolean,
     onCopyToken: () -> Unit,
 ) {
     // The token is shown when the user asks for it, and also while no
     // server has called in, because then it is the only way to pair.
     var tokenVisible by remember { mutableStateOf(false) }
+    val failure = automaticPairing as? AutomaticPairingState.Failed
+    val manual = signedIn && !administrator
+    val showToken = tokenVisible || !serverConnected || manual || failure != null
     Card(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -252,27 +269,50 @@ private fun PairingSection(
                 text = stringResource(R.string.title_pairing),
                 style = MaterialTheme.typography.titleMedium,
             )
-            if (pairingCode != null) {
-                Text(
-                    text = stringResource(R.string.pairing_code_instruction),
+            when {
+                pairingCode != null -> {
+                    Text(
+                        text = stringResource(R.string.pairing_code_instruction),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = PairingCode.group(pairingCode),
+                        style = MaterialTheme.typography.displayMedium.copy(fontFamily = FontFamily.Monospace),
+                    )
+                }
+
+                paired || automaticPairing is AutomaticPairingState.Paired -> Text(
+                    text = stringResource(R.string.pairing_paired),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Text(
-                    text = PairingCode.group(pairingCode),
-                    style = MaterialTheme.typography.displayMedium.copy(fontFamily = FontFamily.Monospace),
-                )
-            } else if (paired) {
-                Text(
-                    text = stringResource(R.string.pairing_done),
+
+                automaticPairing is AutomaticPairingState.Pairing -> Text(
+                    text = stringResource(R.string.pairing_in_progress),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-            } else if (serverConnected) {
-                Text(
+
+                failure != null -> {
+                    Text(
+                        text = stringResource(R.string.pairing_failed, failure.reason),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = stringResource(R.string.pairing_explanation),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                manual -> Text(
+                    text = stringResource(R.string.pairing_explanation),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                serverConnected -> Text(
                     text = stringResource(R.string.pairing_code_where),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-            } else {
-                Text(
+
+                else -> Text(
                     text = stringResource(R.string.pairing_explanation),
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -284,7 +324,7 @@ private fun PairingSection(
                     ),
                 )
             }
-            if (tokenVisible || !serverConnected) {
+            if (showToken) {
                 Text(
                     text = stringResource(R.string.label_pairing_token),
                     style = MaterialTheme.typography.titleSmall,

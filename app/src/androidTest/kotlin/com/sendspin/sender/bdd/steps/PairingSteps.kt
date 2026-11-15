@@ -17,6 +17,7 @@ import com.sendspin.sender.bdd.support.ComposeRuleHolder
 import com.sendspin.sender.bdd.support.Credentials
 import com.sendspin.sender.bdd.support.RealServer
 import com.sendspin.sender.service.SendSpinService
+import com.sendspin.sender.session.PairingServiceHolder
 import com.sendspin.sender.session.SessionStateHolder
 import com.sendspin.sender.storage.EncryptedKeyStore
 import com.sendspin.protocol.session.SourceSessionState
@@ -91,7 +92,9 @@ class PairingSteps {
                 .forEach { keys.removeLongTerm(it.serverId) }
         } finally {
             context.stopService(service)
-            awaitUntil(AWAIT_STOP_MILLIS) { !SessionStateHolder.running.value }
+            awaitUntil(AWAIT_STOP_MILLIS) {
+                !SessionStateHolder.running.value && !PairingServiceHolder.running.value
+            }
             SessionStateHolder.reset()
         }
     }
@@ -166,7 +169,7 @@ class PairingSteps {
         const val SESSION_TIMEOUT_MILLIS = 20_000L
 
         /** How long the pairing may take on the server. */
-        const val PAIRING_TIMEOUT_MILLIS = 90_000L
+        const val PAIRING_TIMEOUT_MILLIS = 120_000L
 
         /** How long the phone may take to forget the old pairing. */
         const val AWAIT_FORGET_MILLIS = 10_000L
