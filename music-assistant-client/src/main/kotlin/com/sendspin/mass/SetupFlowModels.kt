@@ -93,7 +93,12 @@ public data class SetupFlowEntry(
     public val isTextOnly: Boolean get() = type in TEXT_ONLY_TYPES
 
     public companion object {
-        /** The entry kinds that show text and take no answer. */
+        /**
+         * The entry kinds that show text and take no answer.
+         *
+         * A `pairing_code` entry is not here, because the operator types
+         * the code that the device shows into that field.
+         */
         public val TEXT_ONLY_TYPES: Set<String> = setOf(
             "label",
             "divider",
@@ -102,7 +107,6 @@ public data class SetupFlowEntry(
             "url",
             "action",
             "icon",
-            "pairing_code",
         )
     }
 }
