@@ -5,6 +5,7 @@ Feature: SendSpin Source Role
   SendSpin server to discover. It can then pair with the server
   and start sending audio captured from the Android device.
 
+  @requires-music-assistant
   Scenario: Onboarding in the presence of Music Assistant
     Given a fresh install
     And a Music Assistant is present on the network
@@ -14,6 +15,7 @@ Feature: SendSpin Source Role
       | Sign into Music Assistant |
       | Pair with Music Assistant |
 
+  @requires-music-assistant
   Scenario: Signing into Music Assistant
     Given a fresh install
     And a Music Assistant is present on the network

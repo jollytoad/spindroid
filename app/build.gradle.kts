@@ -2,7 +2,10 @@
 // does not apply a Kotlin plugin.
 
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import java.io.ByteArrayOutputStream
@@ -110,10 +113,20 @@ dependencies {
  * even when a scenario fails.
  *
  * Set `ANDROID_SERIAL` to choose a device when more than one is connected.
+ *
+ * Pass `-Pbdd.tags=<filter>` to run a part of the suite. The scenarios that
+ * need a Music Assistant are tagged `@requires-music-assistant`, so
+ * `-Pbdd.tags="not @requires-music-assistant"` runs the suite on a network
+ * without one. Cucumber reports no tests in that case, which passes.
  */
 abstract class RunBddTask : DefaultTask() {
     @get:InputFile
     abstract val adb: RegularFileProperty
+
+    /** The Cucumber tag filter, or no filter for the whole suite. */
+    @get:Input
+    @get:Optional
+    abstract val tags: Property<String>
 
     @get:Inject
     abstract val execOperations: ExecOperations
@@ -121,15 +134,20 @@ abstract class RunBddTask : DefaultTask() {
     @TaskAction
     fun runSuite() {
         val output = ByteArrayOutputStream()
+        val filter = tags.orNull?.takeIf { it.isNotBlank() }
+        val command = buildString {
+            append("am instrument -w")
+            if (filter != null) {
+                append(" -e tags ")
+                append(shellQuote(filter))
+            }
+            append(" com.sendspin.sender.test/io.cucumber.android.runner.CucumberAndroidJUnitRunner")
+        }
         execOperations.exec {
             executable(adb.get().asFile.absolutePath)
-            args(
-                "shell",
-                "am",
-                "instrument",
-                "-w",
-                "com.sendspin.sender.test/io.cucumber.android.runner.CucumberAndroidJUnitRunner",
-            )
+            // The command is one string, because adb joins separate
+            // arguments without the quotes that the device shell needs.
+            args("shell", command)
             standardOutput = output
         }
 
@@ -139,6 +157,10 @@ abstract class RunBddTask : DefaultTask() {
             throw GradleException("The BDD suite failed. Read the output above.")
         }
     }
+
+    /** Wraps a value for the shell on the device. */
+    private fun shellQuote(value: String): String =
+        "'" + value.replace("'", "'\\''") + "'"
 }
 
 tasks.register<RunBddTask>("runBdd") {
@@ -146,4 +168,5 @@ tasks.register<RunBddTask>("runBdd") {
     description = "Runs the BDD suite on a connected device."
     dependsOn("installDebug", "installDebugAndroidTest")
     adb.set(androidComponents.sdkComponents.adb)
+    tags.set(providers.gradleProperty("bdd.tags"))
 }
