@@ -15,20 +15,20 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
 import com.sendspin.protocol.crypto.X25519
 import com.sendspin.protocol.pairing.PairingToken
 import com.sendspin.sender.capture.CaptureStatusHolder
 import com.sendspin.sender.mass.MassAccountManager
-import com.sendspin.sender.mass.MassDiscovery
 import com.sendspin.sender.mass.MassPlayerManager
+import com.sendspin.sender.mass.MusicAssistantDiscovery
 import com.sendspin.sender.service.SendSpinService
 import com.sendspin.sender.session.SessionStateHolder
 import com.sendspin.sender.storage.EncryptedKeyStore
 import com.sendspin.sender.ui.MainScreen
-import kotlinx.coroutines.launch
+import com.sendspin.sender.ui.SignInScreen
 import java.text.DateFormat
 import java.util.Date
 
@@ -41,7 +41,7 @@ import java.util.Date
 class MainActivity : ComponentActivity() {
     private lateinit var keys: EncryptedKeyStore
     private lateinit var accounts: MassAccountManager
-    private lateinit var discovery: MassDiscovery
+    private lateinit var discovery: MusicAssistantDiscovery
     private lateinit var players: MassPlayerManager
 
     /** The message the app shows under the fields. */
@@ -103,7 +103,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         keys = EncryptedKeyStore(this)
         accounts = MassAccountManager(this)
-        discovery = MassDiscovery(this)
+        discovery = AppContainer.discoveryFactory(this)
         players = MassPlayerManager(this, accounts)
 
         setContent {
@@ -112,6 +112,23 @@ class MainActivity : ComponentActivity() {
             val captureStatus by CaptureStatusHolder.state.collectAsStateWithLifecycle()
             val account by accounts.state.collectAsStateWithLifecycle()
             val playerList by players.state.collectAsStateWithLifecycle()
+            val foundServer by discovery.server.collectAsStateWithLifecycle()
+            val discoveryError by discovery.error.collectAsStateWithLifecycle()
+
+            // The sign in form lives on a page of its own. The page closes
+            // when the sign in works, and the main page shows the account
+            // then.
+            var signInPage by rememberSaveable { mutableStateOf(false) }
+
+            // The address of the server comes from the search, so a sign in
+            // works without the user typing it. A typed address still wins.
+            LaunchedEffect(foundServer) {
+                foundServer?.let { accounts.setServerUrl(it.url, edited = false) }
+            }
+
+            LaunchedEffect(account.signedIn) {
+                if (account.signedIn) signInPage = false
+            }
 
             // The list of players comes from the server, so it is read once
             // the account is signed in. It is read again when the phone is
@@ -121,40 +138,45 @@ class MainActivity : ComponentActivity() {
                 if (account.signedIn) players.refresh()
             }
 
-            MainScreen(
-                pairingToken = pairingToken(),
-                state = state,
-                captureStatus = captureStatus,
-                buildLabel = buildLabel(),
-                running = serviceRuns,
-                message = message,
-                account = account,
-                players = playerList,
-                sourceUri = players.sourceUri,
-                clientId = players.clientId,
-                onConnect = { connect() },
-                onDisconnect = { disconnect() },
-                onCopyToken = { copyToken() },
-                onSignIn = { serverUrl, username, password ->
-                    accounts.signIn(serverUrl, username, password)
-                },
-                onSignOut = { accounts.signOut() },
-                onServerUrlChange = { serverUrl ->
-                    accounts.setServerUrl(serverUrl, edited = true)
-                },
-                onRefreshPlayers = { players.refresh() },
-                onChoosePlayer = { playerId -> players.choose(playerId) },
-            )
+            if (signInPage) {
+                SignInScreen(
+                    account = account,
+                    onSignIn = { serverUrl, username, password ->
+                        accounts.signIn(serverUrl, username, password)
+                    },
+                    onCancel = { signInPage = false },
+                    onServerUrlChange = { serverUrl ->
+                        accounts.setServerUrl(serverUrl, edited = true)
+                    },
+                )
+            } else {
+                MainScreen(
+                    pairingToken = pairingToken(),
+                    state = state,
+                    captureStatus = captureStatus,
+                    buildLabel = buildLabel(),
+                    running = serviceRuns,
+                    message = message,
+                    account = account,
+                    players = playerList,
+                    sourceUri = players.sourceUri,
+                    clientId = players.clientId,
+                    discoveredServer = foundServer,
+                    discoveryError = discoveryError,
+                    onConnect = { connect() },
+                    onDisconnect = { disconnect() },
+                    onCopyToken = { copyToken() },
+                    onOpenSignIn = { signInPage = true },
+                    onSignOut = { accounts.signOut() },
+                    onRefreshPlayers = { players.refresh() },
+                    onChoosePlayer = { playerId -> players.choose(playerId) },
+                )
+            }
         }
 
         // The address of the server is found over the network, so the search
         // runs on its own thread.
-        lifecycleScope.launch {
-            discovery.discover(
-                onFound = { serverUrl -> accounts.setServerUrl(serverUrl, edited = false) },
-                onFailed = { reason -> message = reason },
-            )
-        }
+        discovery.start()
     }
 
     override fun onDestroy() {

@@ -1,6 +1,13 @@
 // The application module. AGP 9 has built-in Kotlin support, so this module
 // does not apply a Kotlin plugin.
 
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.TaskAction
+import org.gradle.process.ExecOperations
+import java.io.ByteArrayOutputStream
+import javax.inject.Inject
+
 plugins {
     id("com.android.application")
     // The Compose compiler. The version comes from the buildscript classpath,
@@ -87,4 +94,56 @@ dependencies {
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
+}
+
+/**
+ * Runs the Gherkin suite on a connected device.
+ *
+ * The connected test task uninstalls the app when it ends. This task
+ * installs the two APKs and starts the instrumentation itself, so the app
+ * stays installed, and a person can start it again after the run.
+ *
+ * Android force-stops the app when the instrumentation ends, so the app is
+ * closed when the task returns.
+ *
+ * The task also reads the output, because `am instrument` exits with zero
+ * even when a scenario fails.
+ *
+ * Set `ANDROID_SERIAL` to choose a device when more than one is connected.
+ */
+abstract class RunBddTask : DefaultTask() {
+    @get:InputFile
+    abstract val adb: RegularFileProperty
+
+    @get:Inject
+    abstract val execOperations: ExecOperations
+
+    @TaskAction
+    fun runSuite() {
+        val output = ByteArrayOutputStream()
+        execOperations.exec {
+            executable(adb.get().asFile.absolutePath)
+            args(
+                "shell",
+                "am",
+                "instrument",
+                "-w",
+                "com.sendspin.sender.test/io.cucumber.android.runner.CucumberAndroidJUnitRunner",
+            )
+            standardOutput = output
+        }
+
+        val text = output.toString()
+        logger.lifecycle(text)
+        if (!text.contains("OK (")) {
+            throw GradleException("The BDD suite failed. Read the output above.")
+        }
+    }
+}
+
+tasks.register<RunBddTask>("runBdd") {
+    group = "verification"
+    description = "Runs the BDD suite on a connected device."
+    dependsOn("installDebug", "installDebugAndroidTest")
+    adb.set(androidComponents.sdkComponents.adb)
 }

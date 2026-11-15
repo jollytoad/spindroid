@@ -13,20 +13,22 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.sendspin.mass.MassPlayer
 import com.sendspin.protocol.pairing.PairingCode
@@ -34,14 +36,17 @@ import com.sendspin.protocol.session.SessionPhase
 import com.sendspin.protocol.session.SourceSessionState
 import com.sendspin.sender.R
 import com.sendspin.sender.capture.CaptureStatus
+import com.sendspin.sender.mass.DiscoveredServer
 import com.sendspin.sender.mass.MassAccountState
 import com.sendspin.sender.mass.MassPlayerState
+import kotlinx.coroutines.launch
 
 /**
  * The screen of the app.
  *
- * It has three parts: the button that starts the capture, the token that
- * pairs the phone, and the state of the connection.
+ * It shows the Music Assistant that the phone found, the button that starts
+ * the capture, the token that pairs the phone, and the state of the
+ * connection.
  */
 @Composable
 fun MainScreen(
@@ -55,19 +60,28 @@ fun MainScreen(
     players: MassPlayerState,
     sourceUri: String,
     clientId: String,
+    discoveredServer: DiscoveredServer?,
+    discoveryError: String?,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onCopyToken: () -> Unit,
-    onSignIn: (serverUrl: String, username: String, password: String) -> Unit,
+    onOpenSignIn: () -> Unit,
     onSignOut: () -> Unit,
-    onServerUrlChange: (String) -> Unit,
     onRefreshPlayers: () -> Unit,
     onChoosePlayer: (String) -> Unit,
 ) {
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+
+    // The place of the pairing section that the onboarding option points
+    // at. The scroll offset is in the same space as the position in the
+    // column, so the button reaches the section without knowing its height.
+    var pairingTop by remember { mutableIntStateOf(0) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -76,9 +90,20 @@ fun MainScreen(
             style = MaterialTheme.typography.headlineMedium,
         )
 
+        ServerSection(
+            server = discoveredServer,
+            error = discoveryError,
+            signedIn = account.signedIn,
+            onSignIn = onOpenSignIn,
+            onPair = { scope.launch { scrollState.animateScrollTo(pairingTop) } },
+        )
+
         StartSection(running = running, onConnect = onConnect, onDisconnect = onDisconnect)
 
         PairingSection(
+            modifier = Modifier.onGloballyPositioned {
+                pairingTop = it.positionInParent().y.toInt()
+            },
             pairingToken = pairingToken,
             pairingCode = state.pairingCode,
             serverConnected = state.serverName != null,
@@ -88,9 +113,8 @@ fun MainScreen(
 
         AccountSection(
             account = account,
-            onSignIn = onSignIn,
+            onOpenSignIn = onOpenSignIn,
             onSignOut = onSignOut,
-            onServerUrlChange = onServerUrlChange,
         )
 
         PlayerPickerSection(
@@ -107,6 +131,68 @@ fun MainScreen(
 
         if (message != null) {
             Text(text = message, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+/**
+ * The Music Assistant that the phone found.
+ *
+ * The first thing a new install needs is the name of the server, because
+ * the user has to check that the phone found the right one. The two ways to
+ * connect come next: a sign in, which lets the phone choose the player, and
+ * a pairing, which lets the server use the phone as an input.
+ *
+ * A signed in phone has nothing left to do here for the account, so only
+ * the pairing stays.
+ */
+@Composable
+private fun ServerSection(
+    server: DiscoveredServer?,
+    error: String?,
+    signedIn: Boolean,
+    onSignIn: () -> Unit,
+    onPair: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.title_server),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            when {
+                server != null -> {
+                    Text(
+                        text = server.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                    Text(
+                        text = stringResource(R.string.server_explanation),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (!signedIn) {
+                        Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.option_sign_in))
+                        }
+                    }
+                    OutlinedButton(onClick = onPair, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.option_pair))
+                    }
+                }
+
+                error != null -> Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                else -> Text(
+                    text = stringResource(R.string.server_searching),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }
@@ -147,6 +233,7 @@ private fun StartSection(
 /** The token that pairs the phone with a server, and the code that does it faster. */
 @Composable
 private fun PairingSection(
+    modifier: Modifier = Modifier,
     pairingToken: String,
     pairingCode: String?,
     serverConnected: Boolean,
@@ -156,7 +243,7 @@ private fun PairingSection(
     // The token is shown when the user asks for it, and also while no
     // server has called in, because then it is the only way to pair.
     var tokenVisible by remember { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -215,21 +302,18 @@ private fun PairingSection(
 }
 
 /**
- * The sign in to Music Assistant.
+ * The state of the account on the main page.
  *
- * The account is what lets the app ask the server which players there are.
- * The fields hold the name and the password, so they are cleared once the
- * sign in has worked, and the password never stays on the screen.
+ * The form itself lives on its own page, because the user needs it only
+ * once. This section tells the state, offers the way to the page, and
+ * offers the sign out.
  */
 @Composable
 private fun AccountSection(
     account: MassAccountState,
-    onSignIn: (serverUrl: String, username: String, password: String) -> Unit,
+    onOpenSignIn: () -> Unit,
     onSignOut: () -> Unit,
-    onServerUrlChange: (String) -> Unit,
 ) {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -255,44 +339,8 @@ private fun AccountSection(
                     text = stringResource(R.string.account_explanation),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                OutlinedTextField(
-                    value = account.serverUrl,
-                    onValueChange = onServerUrlChange,
-                    label = { Text(stringResource(R.string.label_account_server)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text(stringResource(R.string.label_account_username)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text(stringResource(R.string.label_account_password)) },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Button(
-                    onClick = {
-                        onSignIn(account.serverUrl, username, password)
-                        password = ""
-                    },
-                    enabled = !account.signingIn && account.serverUrl.isNotBlank(),
-                ) {
-                    Text(
-                        stringResource(
-                            if (account.signingIn) {
-                                R.string.action_signing_in
-                            } else {
-                                R.string.action_sign_in
-                            },
-                        ),
-                    )
+                OutlinedButton(onClick = onOpenSignIn) {
+                    Text(stringResource(R.string.action_sign_in))
                 }
                 account.error?.let { error ->
                     Text(text = error, style = MaterialTheme.typography.bodyMedium)
