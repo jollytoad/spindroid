@@ -179,12 +179,12 @@ round-3 contract for the tap-through mock and then the wiring.
 3. **Disconnect stops and keeps the picks.** Disconnect ends the capture
    and the stream. Both radio picks stay where they were, so a restart
    with Connect is one tap plus the consent dialog.
-4. **Source change while sending requires Disconnect.** While Connect
-   reads Disconnect, the Source radios are disabled. The v1 rule is stop
-   first, then re-pick, then Connect again. (A future graduation item
-   restores the radios and eats the consent dialog on the new pick.)
-5. **Destination change while sending requires Disconnect.** Same rule
-   for the Destination card, for the same pipeline reason.
+4. **Source change while sending swaps the filter.** While Connect reads
+   Disconnect, a source pick swaps the capture filter of the running
+   projection. No consent dialog appears, because the projection carries
+   the whole screen and only the filter changes. The stream carries on.
+5. **Destination change while sending re-routes.** The pick stops the old
+   player, then selects and plays the new one on the server.
 6. **The list is live.** The Source rows subscribe to session changes.
    An app that starts a session appears; an app that drops its session
    leaves, mid-stream included, and behaviour 7 covers that case. No
@@ -195,13 +195,21 @@ round-3 contract for the tap-through mock and then the wiring.
    sending silence to the player until Disconnect or a new pick. (The
    open question of stop-versus-silence is settled here as silence for
    v1; change it if a phone run says otherwise.)
-8. **Empty states carry the next step.** No sessions: the Source card
+8. **The pick follows the focus.** The phone plays one media app at a
+   time, because the apps agree over the audio focus. While the picked
+   app stands paused and exactly one other app plays, that app takes the
+   pick over, and the capture follows it without a consent dialog or a
+   tap. The one-app count keeps the pick still when two apps fight for
+   the focus, and nothing moves while the picked app plays or the picked
+   app pauses with no other app playing. A vanish never moves the pick:
+   it keeps the status line of behaviour 7.
+9. **Empty states carry the next step.** No sessions: the Source card
    shows the help line. No players, or no server: the Destination card
    shows the setup flow. Both cards stay on screen in every state.
-9. **Row controls drive the app.** Play and pause on a row act on that
-   app's session and the row re-reads its state shortly after, as the
-   PoC rows already do. They work whether or not the row is the pick.
-10. **The layout adapts to width.** Portrait stacks the cards; landscape
+10. **Row controls drive the app.** Play and pause on a row act on that
+    app's session and the row re-reads its state shortly after, as the
+    PoC rows already do. They work whether or not the row is the pick.
+11. **The layout adapts to width.** Portrait stacks the cards; landscape
     places them side by side. The state, the selections, and the Connect
     control are identical in both.
 
