@@ -158,6 +158,21 @@ object SessionApps {
         context = null
     }
 
+    /**
+     * The order of the Source card rows.
+     *
+     * The rows read in the alphabetical order of the app labels, so a row
+     * keeps its place while it starts and stops, and the user's hand
+     * learns the card. One label may stand for more than one session, so
+     * the title of the session breaks the tie.
+     */
+    fun rowOrder(apps: List<SessionApp>): List<SessionApp> = apps.sortedWith(
+        compareBy(
+            { it.label.lowercase() },
+            { it.nowPlaying?.lowercase() ?: "" },
+        ),
+    )
+
     /** Picks the app the capture should follow, by package name. */
     fun pick(packageName: String) {
         mutablePicked.value = packageName
@@ -217,7 +232,6 @@ object SessionApps {
         val list = sessions
             .filter { it.metadata != null }
             .distinctBy { it.packageName }
-            .sortedByDescending { it.playbackState?.state == PlaybackState.STATE_PLAYING }
             .mapNotNull { controller ->
                 fresh[controller.packageName] = controller
                 currentPackages += controller.packageName
@@ -239,7 +253,7 @@ object SessionApps {
         }
         handlers.clear()
         handlers.putAll(fresh)
-        mutableApps.value = list
+        mutableApps.value = rowOrder(list)
     }
 
     /** One row of the list, or null when the app cannot be named. */

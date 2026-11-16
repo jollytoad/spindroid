@@ -1,7 +1,9 @@
 package com.sendspin.sender
 
+import com.sendspin.sender.capture.SessionApps
 import com.sendspin.sender.capture.SessionApps.SessionApp
 import com.sendspin.sender.capture.SessionApps.followTarget
+import com.sendspin.sender.capture.SessionApps.rowOrder
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -79,6 +81,49 @@ class SessionAppsFollowTest {
     @Test
     fun `there is no follow before a pick`() {
         assertNull(followTarget(picked = null, apps = listOf(app("Spotify", playing = true))))
+    }
+
+    @Test
+    fun `the rows read in the alphabetical order of the apps`() {
+        val rows = SessionApps.rowOrder(
+            listOf(
+                app("Mellow", playing = true),
+                app("Anchor", playing = false),
+            ),
+        )
+        check(rows.map { it.label } == listOf("Anchor", "Mellow")) {
+            "The playing app came first, but the rows must read ${rows.map { it.label }}."
+        }
+    }
+
+    @Test
+    fun `a start and a stop do not move a row`() {
+        // The order reads the labels alone, so the play state, which
+        // flips from second to second, does not reorder the card.
+        val label = "Spotify"
+        val rowsPlaying = SessionApps.rowOrder(
+            listOf(app(label, playing = true), app("Tidal", playing = false)),
+        )
+        val rowsPaused = SessionApps.rowOrder(
+            listOf(app(label, playing = false), app("Tidal", playing = false)),
+        )
+        check(
+            rowsPlaying.map { it.label } == rowsPaused.map { it.label },
+        ) {
+            "The order changed when the play state changed."
+        }
+    }
+
+    @Test
+    fun `the title breaks the tie of one label`() {
+        // The BDD harness holds several sessions of one app process, so
+        // the rows of one label read by their titles.
+        val one = app("SpinDroid", playing = false).copy(nowPlaying = "Tidal — the BDD session")
+        val two = app("SpinDroid", playing = false).copy(nowPlaying = "Spotify — the BDD session")
+        val rows = SessionApps.rowOrder(listOf(one, two))
+        check(rows[0].nowPlaying!!.startsWith("Spotify")) {
+            "The tie did not read by the title."
+        }
     }
 
     private fun app(name: String, playing: Boolean): SessionApp = SessionApp(
