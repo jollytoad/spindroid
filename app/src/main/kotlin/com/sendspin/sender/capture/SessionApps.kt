@@ -3,6 +3,7 @@ package com.sendspin.sender.capture
 import android.content.ComponentName
 import android.content.Context
 import android.media.session.MediaController
+import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
@@ -67,6 +68,15 @@ object SessionApps {
     }
 
     private var context: Context? = null
+
+    /**
+     * The controllers that carry a callback, by package. The token rides
+     * along: a recreated session carries a new token, and the registration
+     * follows it. Each registration replays its current state, so a read
+     * that finds no change must register nothing.
+     */
+    private val withCallbacks =
+        mutableMapOf<String, Pair<MediaController, MediaSession.Token>>()
     private var manager: MediaSessionManager? = null
     private var listener: MediaSessionManager.OnActiveSessionsChangedListener? = null
     private val handlers = mutableMapOf<String, MediaController>()
@@ -111,10 +121,11 @@ object SessionApps {
     fun stop() {
         manager?.let { sessionManager ->
             listener?.let { sessionManager.removeOnActiveSessionsChangedListener(it) }
-            handlers.values.forEach { it.unregisterCallback(callback) }
+            withCallbacks.values.forEach { it.first.unregisterCallback(callback) }
         }
         manager = null
         listener = null
+        withCallbacks.clear()
         handlers.clear()
         handler.removeCallbacksAndMessages(null)
         retryPending = false
@@ -177,19 +188,29 @@ object SessionApps {
             return
         }
         val fresh = mutableMapOf<String, MediaController>()
+        val currentPackages = mutableSetOf<String>()
         val list = sessions
             .filter { it.metadata != null }
             .distinctBy { it.packageName }
             .sortedByDescending { it.playbackState?.state == PlaybackState.STATE_PLAYING }
             .mapNotNull { controller ->
                 fresh[controller.packageName] = controller
+                currentPackages += controller.packageName
+                // A session that the app rebuilt carries a new token, so
+                // the callbacks follow tokens, never objects: an old
+                // controller that lost its session goes quiet and would
+                // leave the transport buttons stale.
+                val token = controller.sessionToken
+                val registered = withCallbacks[controller.packageName]
+                if (registered == null || registered.second != token) {
+                    registered?.first?.unregisterCallback(callback)
+                    controller.registerCallback(callback)
+                    withCallbacks[controller.packageName] = controller to token
+                }
                 appOf(appContext, controller)
             }
-        handlers.values.filterNot { fresh.containsKey(it.packageName) }.forEach {
-            it.unregisterCallback(callback)
-        }
-        fresh.filterKeys { it !in handlers }.values.forEach {
-            it.registerCallback(callback)
+        withCallbacks.keys.filterNot { it in currentPackages }.forEach { gone ->
+            withCallbacks.remove(gone)?.first?.unregisterCallback(callback)
         }
         handlers.clear()
         handlers.putAll(fresh)
@@ -204,14 +225,19 @@ object SessionApps {
             val uid = appContext.packageManager.getPackageUid(packageName, 0)
             if (uid <= 0) return null
             val actions = controller.playbackState?.actions ?: 0L
+            // The mask that Spotify uses: some apps publish only the
+            // play-pause action, and the pair of buttons must read it as
+            // the cover of both.
+            val plays = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PLAY_PAUSE
+            val pauses = PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE
             SessionApp(
                 packageName = packageName,
                 label = appContext.packageManager.getApplicationLabel(info).toString(),
                 uid = uid,
                 playingNow = controller.playbackState?.state == PlaybackState.STATE_PLAYING,
                 nowPlaying = controller.metadata?.description?.toString(),
-                canPlay = actions and PlaybackState.ACTION_PLAY != 0L,
-                canPause = actions and PlaybackState.ACTION_PAUSE != 0L,
+                canPlay = actions and plays != 0L,
+                canPause = actions and pauses != 0L,
             )
         } catch (exception: android.content.pm.PackageManager.NameNotFoundException) {
             null

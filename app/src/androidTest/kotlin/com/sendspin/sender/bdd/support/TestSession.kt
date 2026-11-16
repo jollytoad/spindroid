@@ -83,8 +83,9 @@ object TestSession {
 
     private fun stateOf(playing: Boolean): PlaybackState = PlaybackState.Builder()
         .setActions(
-            PlaybackState.ACTION_PLAY
-                or PlaybackState.ACTION_PAUSE
+            // Spotify publishes only the play-pause action, so the row
+            // buttons must read that mask as the cover of both.
+            PlaybackState.ACTION_PLAY_PAUSE
                 or PlaybackState.ACTION_SEEK_TO,
         )
         .setState(
