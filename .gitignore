@@ -24,3 +24,6 @@ bdd/credentials.properties
 .idea/
 *.iml
 .DS_Store
+
+# The Obsidian vault configuration inside the plans folder.
+plans/.obsidian/
