@@ -80,7 +80,14 @@ verb: selection plus a start control is the whole interaction.
 3. **Real-but-thin wiring.** The same cards with the live session list
    and real discovery, with the capture trigger behind the new layout.
    The mock from step 2 becomes the skeleton; the throwaway part stays
-   small.
+   small. This step is done: the suite in
+   `bdd/two-card-sender.feature` runs on the device with
+   `./gradlew runBdd -Pbdd.tags="@two-card"`, and the streaming scenarios
+   use the real Music Assistant, the real consent dialog, and a real
+   player. Two flows changed to make the route work: the choice of the
+   player reaches the server while the phone listens, and the pairing
+   listener yields the port to the capture service when the user
+   connects.
 
 ## The mock-ups, round 1
 
