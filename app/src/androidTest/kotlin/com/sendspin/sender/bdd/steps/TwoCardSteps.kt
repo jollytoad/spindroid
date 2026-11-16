@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
@@ -127,7 +128,11 @@ class TwoCardSteps {
     @When("{word} is pressed on the {word} row")
     fun transportIsPressedOnTheRow(button: String, app: String) {
         composeRule.waitForIdle()
-        composeRule.onNodeWithText(button).performClick()
+        // Every row carries both words, so the press names its row and
+        // reads the button inside it.
+        composeRule.onNode(
+            hasText(button) and hasAnyAncestor(row(app)),
+        ).performClick()
         composeRule.waitForIdle()
     }
 

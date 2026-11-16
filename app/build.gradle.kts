@@ -79,6 +79,14 @@ android {
         ignoreAssetsPatterns.add("credentials.properties")
     }
 
+    testOptions {
+        // The unit tests read the rules of the app over JUnit 5, like the
+        // other modules do.
+        unitTests.all { unitTest ->
+            unitTest.useJUnitPlatform()
+        }
+    }
+
     buildFeatures {
         compose = true
     }
@@ -93,6 +101,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.security.crypto)
     implementation(libs.java.websocket)
+
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

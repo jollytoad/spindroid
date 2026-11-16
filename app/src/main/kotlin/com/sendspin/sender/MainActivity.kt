@@ -154,6 +154,17 @@ class MainActivity : ComponentActivity() {
                 onDispose { SessionApps.stop() }
             }
 
+            // The pick follows the focus: the phone plays one media app at
+            // a time, and the stream must carry the sound that plays. The
+            // swap reuses the running projection, so the move costs no
+            // consent and no new pick tap.
+            LaunchedEffect(Unit) {
+                SessionApps.apps.collect { apps ->
+                    val target = SessionApps.followTarget(SessionApps.picked.value, apps)
+                    if (target != null) pickSource(target)
+                }
+            }
+
             // The pick of the player is a choice of the screen, not of the
             // server. The server learns it when the Connect control starts.
             var playerPick by rememberSaveable { mutableStateOf<String?>(null) }

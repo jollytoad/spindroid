@@ -67,6 +67,27 @@ object SessionApps {
         return mutableApps.value.any { it.packageName == picked }
     }
 
+    /**
+     * The app that the pick follows to, or null while the pick stands.
+     *
+     * The phone plays one media app at a time, because the well-behaved
+     * apps agree over the audio focus about which one it is. The pick
+     * follows the focus: while the picked app stands paused and exactly
+     * one other app plays, that app takes the pick over. The one-app
+     * count keeps the pick still, because two apps fighting for the focus
+     * would otherwise bounce the pick, and each bounce moves the capture.
+     * A vanish does not move the pick: it has its own status line, and a
+     * gone session must not hand the stream to another app by accident.
+     */
+    fun followTarget(picked: String?, apps: List<SessionApp>): String? {
+        if (picked == null) return null
+        val pickedApp = apps.firstOrNull { it.packageName == picked } ?: return null
+        if (pickedApp.playingNow) return null
+        val playing = apps
+            .filter { it.playingNow && it.packageName != picked }
+        return playing.singleOrNull()?.packageName
+    }
+
     private var context: Context? = null
 
     /**
@@ -80,7 +101,11 @@ object SessionApps {
     private var manager: MediaSessionManager? = null
     private var listener: MediaSessionManager.OnActiveSessionsChangedListener? = null
     private val handlers = mutableMapOf<String, MediaController>()
-    private val handler = Handler(Looper.getMainLooper())
+
+    // The handler belongs to the main looper of the device, so it is made
+    // on the first use: a JVM unit test reads the pure rules without an
+    // Android looper.
+    private val handler: Handler by lazy { Handler(Looper.getMainLooper()) }
     private var retryPending = false
 
     /**

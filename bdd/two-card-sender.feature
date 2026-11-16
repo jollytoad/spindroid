@@ -90,6 +90,15 @@ Feature: The two-card sender screen
     Then the stream plays Spotify's audio
 
   @requires-music-assistant
+  @followpick
+  Scenario: A paused pick holds while nothing else plays
+    Given the stream sends Tidal's audio to the first player
+    When Pause is pressed on the Tidal row
+    Then "Tidal" stays picked on the Source card
+    And the stream keeps sending silence to the first player
+    And the control still reads "Disconnect"
+
+  @requires-music-assistant
   Scenario: The destination changes while streaming
     Given the stream sends Tidal's audio to the first player
     When the second player is picked on the Destination card
