@@ -81,6 +81,20 @@ architecture.
 - [Testing strategy](testing-strategy.md) - how each part gets verified.
 - [BDD testing](bdd-testing.md) - the Gherkin and Cucumber harness, the local
   runs, and the CI stages.
+- [Media session metadata](media-session-metadata.md) - what Tidal and BBC
+  Sounds publish about the playing track, from on-device probes.
+- [Media transfer to Music Assistant](media-transfer-to-music-assistant.md) -
+  the track, album, and radio transfer scenario over the MA API.
+- [Per-app capture](per-app-capture.md) - the PoC that follows one media app,
+  the phone proof runs, and what graduating it needs.
+- [Route publishing](route-publishing.md) - the cast experiment and its
+  negative result: discovery works, the apps do not bite.
+- [The delayed speaker](delayed-speaker.md) - mute during send plus a local
+  delayed copy, to put the phone speaker in the group.
+- [The two-card sender UI](two-card-ux.md) - the Source and Destination
+  cards, the state model, and the mock-up route for the primary screen.
+- [Media control](media-control.md) - play, pause, and the other transport
+  commands, addressed per app through the same session access.
 
 ## Sources
 
