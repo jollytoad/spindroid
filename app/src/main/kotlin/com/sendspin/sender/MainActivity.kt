@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.util.Log
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -33,6 +34,10 @@ import com.sendspin.sender.session.SessionStateHolder
 import com.sendspin.sender.storage.EncryptedKeyStore
 import com.sendspin.sender.ui.MainScreen
 import com.sendspin.sender.ui.SignInScreen
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
@@ -48,6 +53,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var discovery: MusicAssistantDiscovery
     private lateinit var players: MassPlayerManager
     private lateinit var pairing: AutomaticPairing
+
+    private companion object {
+        const val TAG = "SendSpin"
+    }
 
     /** The message the app shows under the fields. */
     private var message by mutableStateOf<String?>(null)
@@ -190,7 +199,11 @@ class MainActivity : ComponentActivity() {
                     onPickSession = { packageName -> SessionApps.pick(packageName) },
                     onSessionPlay = { packageName -> SessionApps.play(packageName) },
                     onSessionPause = { packageName -> SessionApps.pause(packageName) },
-                    onPickPlayer = { playerId -> playerPick = playerId },
+                    onPickPlayer = { playerId ->
+                        playerPick = playerId
+                        routePlayer(playerId)
+                    },
+
                     onConnect = { connect() },
                     onDisconnect = { disconnect() },
                     onCopyToken = { copyToken() },
@@ -216,6 +229,34 @@ class MainActivity : ComponentActivity() {
         accounts.close()
         super.onDestroy()
     }
+
+    /**
+     * The pick of the player is a choice of the screen, not of the server.
+     * Once the stream listens, the app tells the server to point the picked
+     * player at the phone, and retries until the server answers, because
+     * the server routes on its own clock.
+     *
+     * The router runs on the scope of this screen, so it survives a
+     * recomposition, and it ends with the screen.
+     */
+    private fun routePlayer(playerId: String) {
+        router?.cancel()
+        router = lifecycleScope.launch {
+            while (isActive) {
+                val routed = players.state.value.players.any {
+                    it.activeSource == players.sourceUri || it.activeSource == players.clientId
+                }
+                if (SessionStateHolder.running.value && !routed) {
+                    Log.i(TAG, "The server gets the routing of the player $playerId again")
+                    players.choose(playerId)
+                }
+                delay(2_000)
+            }
+        }
+    }
+
+    /** The coroutine that repeats the routing of the picked player. */
+    private var router: kotlinx.coroutines.Job? = null
 
     /**
      * Starts the capture.
@@ -256,10 +297,12 @@ class MainActivity : ComponentActivity() {
 
     /** Starts the service, with the consent of the media projection. */
     private fun startCapture(resultCode: Int, data: Intent?) {
+        val uid = SessionApps.uidOf(SessionApps.picked.value)
         SendSpinService.start(
             context = this,
             resultCode = resultCode,
             resultData = data,
+            uids = if (uid > 0) intArrayOf(uid) else null,
         )
     }
 

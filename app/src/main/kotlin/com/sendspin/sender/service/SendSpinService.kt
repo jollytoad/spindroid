@@ -93,7 +93,18 @@ class SendSpinService : Service() {
      * is opened, so the notification goes up first.
      */
     private fun startEverything(intent: Intent?) {
-        if (inboundServer != null) return
+        if (inboundServer != null) {
+            if (!pairing) return
+            // The pairing listener holds the port that the capture wants.
+            // The pairing flow has done its work on the server side by the
+            // time the user connects, so the listener goes, with the
+            // service staying up for the capture.
+            advertiser?.stop()
+            advertiser = null
+            inboundServer?.stop()
+            inboundServer = null
+            PairingServiceHolder.reset()
+        }
         pairing = false
         startForegroundWithType(ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         publishRunning(true)
@@ -114,7 +125,7 @@ class SendSpinService : Service() {
             return
         }
         mediaProjection = projection
-        val captureSource = SystemAudioCapture(projection)
+        val captureSource = SystemAudioCapture(projection, matchingUids = uidsOf(intent))
         capture = captureSource
         CaptureStatusHolder.publishRunning(true)
         CaptureStatusHolder.publishError(null)
@@ -289,6 +300,13 @@ class SendSpinService : Service() {
         /** The extra that holds the consent data of the media projection. */
         const val EXTRA_RESULT_DATA = "result_data"
 
+        /** The extra that holds the uids that the capture follows. */
+        const val EXTRA_UIDS = "uids"
+
+        /** The uids that the capture follows, or none for the whole mix. */
+        private fun uidsOf(intent: Intent?): IntArray =
+            intent?.getIntArrayExtra(EXTRA_UIDS) ?: IntArray(0)
+
         /**
          * Starts the listener without a capture.
          *
@@ -309,16 +327,21 @@ class SendSpinService : Service() {
          * @param context the context that starts the service
          * @param resultCode the consent result, for the media projection
          * @param resultData the consent data, for the media projection
+         * @param uids the uids the capture follows, or none for the whole mix
          */
         fun start(
             context: Context,
             resultCode: Int = 0,
             resultData: Intent? = null,
+            uids: IntArray? = null,
         ) {
             val intent = Intent(context, SendSpinService::class.java)
             if (resultCode != 0 && resultData != null) {
                 intent.putExtra(EXTRA_RESULT_CODE, resultCode)
                 intent.putExtra(EXTRA_RESULT_DATA, resultData)
+            }
+            if (uids != null && uids.isNotEmpty()) {
+                intent.putExtra(EXTRA_UIDS, uids)
             }
             context.startForegroundService(intent)
         }

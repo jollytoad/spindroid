@@ -98,6 +98,15 @@ object SessionApps {
         read(appContext)
     }
 
+    /**
+     * The uid that the capture filter takes for one package.
+     *
+     * The answer is 0 when the app is not in the list, either because it
+     * has no session or because the list is stale at the call.
+     */
+    fun uidOf(packageName: String?): Int =
+        apps.value.firstOrNull { it.packageName == packageName }?.uid ?: 0
+
     /** Stops the session reading and forgets the list. */
     fun stop() {
         manager?.let { sessionManager ->

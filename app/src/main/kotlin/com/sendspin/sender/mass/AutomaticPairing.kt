@@ -122,7 +122,10 @@ class AutomaticPairing(
                 is PairingResult.Failed -> fail(result.reason)
             }
         } finally {
-            if (!captureRuns) {
+            if (!captureRuns && !SessionStateHolder.running.value) {
+                // A capture may have started while the pairing ran, and it
+                // may not go: the stream belongs to the user, not to the
+                // pairing.
                 appContext.stopService(Intent(appContext, SendSpinService::class.java))
             }
         }

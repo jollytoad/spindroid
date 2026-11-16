@@ -1,6 +1,7 @@
 package com.sendspin.sender.mass
 
 import android.content.Context
+import android.util.Log
 import com.sendspin.mass.MassPlayer
 import com.sendspin.mass.MusicAssistantClient
 import com.sendspin.mass.PlayersResult
@@ -104,6 +105,10 @@ class MassPlayerManager(
      * way when it did nothing at all. So the list is read again, and the
      * screen shows what the server really did.
      *
+     * The choice works while the phone listens: the server connects to the
+     * phone when a player points at it, so the session pairs after the
+     * choice, not before it.
+     *
      * @param playerId the player that should play the phone
      */
     fun choose(playerId: String) {
@@ -113,9 +118,9 @@ class MassPlayerManager(
             publish(mutableState.value.copy(error = "The address of Music Assistant is not known yet"))
             return
         }
-        if (!isLive()) {
-            // The server cannot play a source that the phone does not send,
-            // and it says so in a way that helps nobody.
+        if (!SessionStateHolder.running.value) {
+            // The server cannot reach a phone that does not listen, and the
+            // Connect control puts the listener up.
             publish(mutableState.value.copy(error = REASON_NOT_LIVE))
             return
         }
@@ -125,6 +130,7 @@ class MassPlayerManager(
             val result = withContext(Dispatchers.IO) {
                 client.selectSource(token, playerId, sourceUri)
             }
+            Log.i(TAG, "The source of $playerId went to the server with $result")
             if (result is SelectSourceResult.Failure) {
                 publish(mutableState.value.copy(choosing = null, error = result.reason))
                 return@launch
@@ -175,16 +181,6 @@ class MassPlayerManager(
     }
 
     /**
-     * Whether the server has the phone.
-     *
-     * The server keeps the phone in its list of devices after the phone
-     * goes away, so the list does not tell whether the sound is live. The
-     * session does: the server may use the captured audio only while the
-     * session is paired.
-     */
-    private fun isLive(): Boolean = SessionStateHolder.state.value.paired
-
-    /**
      * The reason the choice failed, or nothing when it worked.
      *
      * The server keeps the chosen source on the player, and that is how the
@@ -203,12 +199,14 @@ class MassPlayerManager(
     }
 
     private companion object {
+        private const val TAG = "SendSpin"
+
         /** The address of a live source of the phone. */
         const val SOURCE_SCHEME = "sendspin_source://audio_source/"
 
         /** The reason the server cannot play the phone yet. */
         const val REASON_NOT_LIVE =
-            "The phone is not connected to the server, so it has no sound to send yet"
+            "The phone is not streaming yet, so press Connect first"
 
         /**
          * How long the app waits for the server to tell about the change.

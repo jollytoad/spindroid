@@ -8,6 +8,9 @@
     <string name="source_empty">No app holds a media session. Play something, then this list fills in.</string>
     <string name="action_play">Play</string>
     <string name="action_pause">Pause</string>
+    <string name="source_locked">Disconnect to pick another source.</string>
+    <string name="destination_locked">Disconnect to pick another player.</string>
+    <string name="source_vanished">The app that played is gone. The stream keeps sending silence until you disconnect.</string>
 
     <!-- The Music Assistant that the phone found. -->
     <string name="server_searching">Looking for Music Assistant on the local network…</string>

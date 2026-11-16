@@ -90,10 +90,10 @@ fun MainScreen(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(scrollState)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        // The bar does not scroll, so the stream control is always in view.
         TopBar(
             running = running,
             connectEnabled = running || (pickedSession != null && playerPick != null),
@@ -101,11 +101,26 @@ fun MainScreen(
             onDisconnect = onDisconnect,
         )
 
-        if (message != null) {
-            Text(text = message, style = MaterialTheme.typography.bodyMedium)
+        // The picked app left its session while the stream runs. The
+        // capture keeps sending silence, so the line says what happened.
+        if (running && pickedSession != null && sessionApps.none { it.packageName == pickedSession }) {
+            Text(
+                text = stringResource(R.string.source_vanished),
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
 
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            if (message != null) {
+                Text(text = message, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             if (maxWidth >= WIDE_WIDTH) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -114,6 +129,7 @@ fun MainScreen(
                     SourceCard(
                         apps = sessionApps,
                         picked = pickedSession,
+                        locked = running,
                         onPick = onPickSession,
                         onPlay = onSessionPlay,
                         onPause = onSessionPause,
@@ -139,6 +155,7 @@ fun MainScreen(
                     SourceCard(
                         apps = sessionApps,
                         picked = pickedSession,
+                        locked = running,
                         onPick = onPickSession,
                         onPlay = onSessionPlay,
                         onPause = onSessionPause,
@@ -180,7 +197,12 @@ fun MainScreen(
             onSignOut = onSignOut,
         )
 
-        StatusSection(state = state, captureStatus = captureStatus, buildLabel = buildLabel)
+            StatusSection(
+                state = state,
+                captureStatus = captureStatus,
+                buildLabel = buildLabel,
+            )
+        }
     }
 }
 
@@ -224,6 +246,7 @@ private fun TopBar(
 private fun SourceCard(
     apps: List<SessionApps.SessionApp>,
     picked: String?,
+    locked: Boolean,
     onPick: (String) -> Unit,
     onPlay: (String) -> Unit,
     onPause: (String) -> Unit,
@@ -248,9 +271,16 @@ private fun SourceCard(
                     SourceRow(
                         app = app,
                         picked = app.packageName == picked,
+                        locked = locked,
                         onPick = { onPick(app.packageName) },
                         onPlay = { onPlay(app.packageName) },
                         onPause = { onPause(app.packageName) },
+                    )
+                }
+                if (locked) {
+                    Text(
+                        text = stringResource(R.string.source_locked),
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
@@ -263,6 +293,7 @@ private fun SourceCard(
 private fun SourceRow(
     app: SessionApps.SessionApp,
     picked: Boolean,
+    locked: Boolean,
     onPick: () -> Unit,
     onPlay: () -> Unit,
     onPause: () -> Unit,
@@ -270,11 +301,11 @@ private fun SourceRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onPick),
+            .clickable(enabled = !locked, onClick = onPick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        RadioButton(selected = picked, onClick = onPick)
+        RadioButton(selected = picked, onClick = onPick, enabled = !locked)
         Column(modifier = Modifier.weight(1f)) {
             Text(text = app.label, style = MaterialTheme.typography.bodyLarge)
             app.nowPlaying?.let { line ->
@@ -357,6 +388,12 @@ private fun DestinationCard(
                     }
                     players.error?.let { message ->
                         Text(text = message, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (running) {
+                        Text(
+                            text = stringResource(R.string.destination_locked),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                 }
 

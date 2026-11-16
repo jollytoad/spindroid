@@ -21,6 +21,7 @@ import java.nio.ByteOrder
  */
 class SystemAudioCapture(
     private val mediaProjection: MediaProjection,
+    private val matchingUids: IntArray = IntArray(0),
     private val sampleRate: Int = DEFAULT_SAMPLE_RATE,
 ) : AudioCapture {
     private var record: AudioRecord? = null
@@ -46,11 +47,20 @@ class SystemAudioCapture(
         // the code -2, which means an invalid operation.
         mediaProjection.registerCallback(callback, handler)
         callbackRegistered = true
-        val configuration = AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
-            .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-            .addMatchingUsage(AudioAttributes.USAGE_GAME)
-            .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
-            .build()
+        // The capture takes the mix of the matched usages, or the mix of
+        // the matched apps when a source is picked. The two filters are
+        // a union on the system side, so a uid filter must stand alone:
+        // a usage filter beside it would route other apps back in.
+        val configurationBuilder = AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
+        if (matchingUids.isEmpty()) {
+            configurationBuilder
+                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                .addMatchingUsage(AudioAttributes.USAGE_GAME)
+                .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+        } else {
+            matchingUids.forEach { uid -> configurationBuilder.addMatchingUid(uid) }
+        }
+        val configuration = configurationBuilder.build()
         val minBuffer = AudioRecord.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_IN_STEREO,
