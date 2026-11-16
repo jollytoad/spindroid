@@ -14,10 +14,16 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import kotlin.math.abs
 import com.sendspin.sender.R
+import com.sendspin.sender.bdd.support.AdminApi
 import com.sendspin.sender.bdd.support.ComposeRuleHolder
+import com.sendspin.sender.bdd.support.Consent
 import com.sendspin.sender.bdd.support.RealServer
 import com.sendspin.sender.bdd.support.ServerPlayers
 import com.sendspin.sender.bdd.support.TestSession
+import com.sendspin.sender.capture.CaptureStatusHolder
+import com.sendspin.sender.session.SessionStateHolder
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
 import io.cucumber.java.After
 import io.cucumber.java.en.And
 import io.cucumber.java.en.Given
@@ -218,6 +224,15 @@ class TwoCardSteps {
         context.getString(R.string.action_connect),
     )
 
+    /** Serves the diagnosis of a wait that never ended. */
+    private fun dumpScreen(tag: String) {
+        val file = java.io.File(
+            InstrumentationRegistry.getInstrumentation().targetContext.cacheDir,
+            "spindroid-$tag.png",
+        )
+        UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).takeScreenshot(file)
+    }
+
     /** Waits until a row with the name is on screen. */
     private fun waitForRow(name: String) {
         composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
@@ -249,9 +264,231 @@ class TwoCardSteps {
         check(condition()) { "The condition did not hold within ${timeoutMillis / 1000} seconds." }
     }
 
+
+    @Given("the stream sends Tidal's audio to the first player")
+    fun theStreamSendsToTheFirstPlayer() {
+        TestSession.start(title("Tidal"), playing = true)
+        waitForRow("Tidal")
+        // The search finds the server a moment behind, so the option waits.
+        try {
+            composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
+                composeRule.onAllNodesWithText("Sign into Music Assistant")
+                    .fetchSemanticsNodes().isNotEmpty()
+            }
+        } catch (exception: androidx.compose.ui.test.ComposeTimeoutException) {
+            dumpScreen("sign-in")
+            error("The sign in option never showed. A screenshot is in the app cache, sign-in.png.")
+        }
+        composeRule.onNodeWithText("Sign into Music Assistant").performClick()
+        PairingSteps().theSignInFormIsFilledWithTheAccount()
+        PairingSteps().buttonIsPressed("Sign in")
+        theAppIsSignedIn()
+        appIsPickedOnTheSourceCard("Tidal")
+        firstPlayerIsPicked()
+        // The bar does not scroll, so the control is in view for the press.
+        composeRule.onNodeWithText(context.getString(R.string.action_connect)).performClick()
+        Consent.waitPresented()
+        Consent.choose("Start now")
+        theStreamSendsToTheFirstPlayerThen()
+    }
+
+    /** Waits for the stream to the picked player, after the consent. */
+    private fun theStreamSendsToTheFirstPlayerThen() {
+        try {
+            composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
+                composeRule.onAllNodesWithText(
+                    context.getString(R.string.action_disconnect),
+                ).fetchSemanticsNodes().isNotEmpty()
+            }
+        } catch (exception: androidx.compose.ui.test.ComposeTimeoutException) {
+            dumpScreen("stream")
+            error("The control never read Disconnect. A screenshot is in /data/local/tmp.")
+        }
+        awaitUntil(AWAIT_STREAM_MILLIS) {
+            CaptureStatusHolder.state.value.running &&
+                (SessionStateHolder.state.value.streaming ||
+                    SessionStateHolder.state.value.serverRequestedAudio)
+        }
+        check(ServerPlayers.awaitRouted(AWAIT_ROUTE_MILLIS)) {
+            "The server never pointed a player at the phone."
+        }
+    }
+
+    @When("{string} is chosen on the consent dialog")
+    fun consentIsAnswered(option: String) {
+        Consent.choose(option)
+        composeRule.waitForIdle()
+    }
+
+    @Then("the media projection consent dialog is presented")
+    fun theConsentDialogIsPresented() {
+        Consent.waitPresented()
+    }
+
+    @Then("the phone streams to the first player")
+    fun thePhoneStreamsToTheFirstPlayer() {
+        val routed = ServerPlayers.awaitRouted(AWAIT_STREAM_MILLIS)
+        if (!routed) {
+            dumpScreen("route")
+            error("The server never pointed a player at the phone.")
+        }
+        // A player that sits idle asks the phone for no audio, so the step
+        // starts the transport the way a listener would press play on it.
+        RealServer.find()
+        val server = RealServer.found
+            ?: error("The scenario needs a Music Assistant on the network.")
+        try {
+            AdminApi.playPlayer(
+                serverUrl = server.url,
+                token = AdminApi.signIn(server.url),
+                playerId = ServerPlayers.firstId(),
+            )
+        } catch (exception: IllegalStateException) {
+            val dump = AdminApi.dumpPlayers(server.url, AdminApi.signIn(server.url))
+            dumpScreen("routes")
+            InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+                .resolve("spindroid-players.json").writeText(dump)
+            throw exception
+        }
+        val requested = awaitSilently(AWAIT_STREAM_MILLIS) {
+            SessionStateHolder.state.value.streaming ||
+                SessionStateHolder.state.value.serverRequestedAudio
+        }
+        val stateNow = SessionStateHolder.state.value
+        check(requested) {
+            "The server did not request the audio. routed=$routed paired=${stateNow.paired} " +
+                "phase=${stateNow.phase} server=${stateNow.serverName}"
+        }
+    }
+
+    /** Waits for a condition quietly, and reports what the last read said. */
+    private fun awaitSilently(timeoutMillis: Long, condition: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        while (System.currentTimeMillis() < deadline) {
+            if (condition()) return true
+            Thread.sleep(POLL_MILLIS)
+        }
+        return condition()
+    }
+
+    @Then("the notification offers Stop")
+    fun theNotificationOffersStop() {
+        // The app may read its own notifications without a permission. The
+        // service publishes one while it streams, and its action offers
+        // the stop.
+        val manager = context.getSystemService(
+            android.app.NotificationManager::class.java,
+        )
+        awaitUntil(AWAIT_STOP_MILLIS) {
+            manager.activeNotifications.any { entry ->
+                entry.notification.actions.any { action ->
+                    action.title == context.getString(R.string.notification_stop)
+                }
+            }
+        }
+    }
+
+    @Then("the stream stops")
+    fun theStreamStops() {
+        awaitUntil(AWAIT_STOP_MILLIS) {
+            !SessionStateHolder.running.value && !SessionStateHolder.state.value.streaming
+        }
+    }
+
+    @Then("the capture stops")
+    fun theCaptureStops() {
+        awaitUntil(AWAIT_STOP_MILLIS) { !CaptureStatusHolder.state.value.running }
+    }
+
+    @Then("the first player stays picked on the Destination card")
+    fun theFirstPlayerStaysPicked() {
+        val label = ServerPlayers.firstLabel()
+        val node = composeRule.onNodeWithText(label, substring = true).fetchSemanticsNode()
+        val radio = node.children.firstOrNull {
+            runCatching { it.config[SemanticsProperties.Selected] }.getOrNull() == true
+        } ?: error("The row of the first player has no radio to read.")
+        check(radio.config[SemanticsProperties.Selected]) {
+            "The first player is not picked."
+        }
+    }
+
+    @When("the {word} card is viewed")
+    fun cardIsViewed(title: String) {
+        val label = if (title == "Source") {
+            context.getString(R.string.title_source)
+        } else {
+            context.getString(R.string.title_destination)
+        }
+        composeRule.onNodeWithText(label).performScrollTo().assertIsDisplayed()
+    }
+
+    @Then("the Source radios are disabled")
+    fun theSourceRadiosAreDisabled() {
+        radioDisabledIn("Tidal")
+    }
+
+    @Then("the Destination radios are disabled")
+    fun theDestinationRadiosAreDisabled() {
+        radioDisabledIn(ServerPlayers.firstLabel())
+    }
+
+    /** Reads the radio of one row, and requires the disabled state. */
+    private fun radioDisabledIn(name: String) {
+        val node = composeRule.onNodeWithText(name, substring = true)
+            .performScrollTo()
+            .fetchSemanticsNode()
+        val radio = node.children.firstOrNull {
+            runCatching { it.config[SemanticsProperties.Selected] }.getOrNull() != null
+        } ?: error("The row of $name has no radio to read.")
+        check(runCatching { radio.config[SemanticsProperties.Disabled] }.getOrNull() != null) {
+            "The radio of $name is not disabled."
+        }
+    }
+
+    @And("the card says to disconnect before picking another source")
+    fun theCardSaysToDisconnectForSources() {
+        composeRule.onNodeWithText(
+            context.getString(R.string.source_locked),
+        ).performScrollTo().assertIsDisplayed()
+    }
+
+    @And("the card says to disconnect before picking another player")
+    fun theCardSaysToDisconnectForPlayers() {
+        composeRule.onNodeWithText(
+            context.getString(R.string.destination_locked),
+        ).performScrollTo().assertIsDisplayed()
+    }
+
+    @And("a status line under the bar says the source vanished")
+    fun aStatusLineSaysTheSourceVanished() {
+        composeRule.onNodeWithText(
+            context.getString(R.string.source_vanished),
+        ).assertIsDisplayed()
+    }
+
+    @And("the stream keeps sending silence to the first player")
+    fun theStreamKeepsSendingSilence() {
+        awaitUntil(AWAIT_STREAM_MILLIS) { CaptureStatusHolder.state.value.running }
+        check(SessionStateHolder.running.value) { "The service stopped." }
+    }
+
+    @And("the control still reads {string}")
+    fun theControlStillReads(text: String) {
+        theControlReads(text)
+    }
+
     private companion object {
         /** How long the session has to answer the transport commands. */
         const val AWAIT_PLAY_MILLIS = 10_000L
+
+        /** How long the stream may take to reach the picked player. */
+        const val AWAIT_STREAM_MILLIS = 30_000L
+
+        /** How long the server may take to route the player. */
+        const val AWAIT_ROUTE_MILLIS = 60_000L
+
+        /** How long the stop may take. */
+        const val AWAIT_STOP_MILLIS = 15_000L
 
         /** How long a wait sleeps between two checks. */
         const val POLL_MILLIS = 250L

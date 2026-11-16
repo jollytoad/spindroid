@@ -55,6 +55,7 @@ Feature: The two-card sender screen
     And "Tidal" stays picked on the Source card
 
   @requires-music-assistant
+  @streaming
   Scenario: Connect starts the stream
     Given Tidal holds a playing session
     And "Sign into Music Assistant" is chosen
@@ -66,7 +67,7 @@ Feature: The two-card sender screen
     When "Connect" is pressed
     Then the media projection consent dialog is presented
     When "Start now" is chosen on the consent dialog
-    Then the stream sends Tidal's audio to the first player
+    Then the phone streams to the first player
     And the control reads "Disconnect"
     And the notification offers Stop
 
