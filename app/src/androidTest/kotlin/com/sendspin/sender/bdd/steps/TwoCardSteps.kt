@@ -334,23 +334,24 @@ class TwoCardSteps {
         }
         // A player that sits idle asks the phone for no audio, so the step
         // starts the transport the way a listener would press play on it.
+        // The player answers on its own clock, and a player that is waking
+        // up may refuse once, so the press retries.
         RealServer.find()
         val server = RealServer.found
             ?: error("The scenario needs a Music Assistant on the network.")
-        try {
-            AdminApi.playPlayer(
-                serverUrl = server.url,
-                token = AdminApi.signIn(server.url),
-                playerId = ServerPlayers.firstId(),
-            )
-        } catch (exception: IllegalStateException) {
-            val dump = AdminApi.dumpPlayers(server.url, AdminApi.signIn(server.url))
-            dumpScreen("routes")
-            InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
-                .resolve("spindroid-players.json").writeText(dump)
-            throw exception
-        }
+        val token = AdminApi.signIn(server.url)
+        val playerId = ServerPlayers.firstId()
         val requested = awaitSilently(AWAIT_STREAM_MILLIS) {
+            try {
+                AdminApi.playPlayer(
+                    serverUrl = server.url,
+                    token = token,
+                    playerId = playerId,
+                )
+            } catch (exception: IllegalStateException) {
+                // The player wakes on its own clock; the next press comes
+                // with the next poll.
+            }
             SessionStateHolder.state.value.streaming ||
                 SessionStateHolder.state.value.serverRequestedAudio
         }
