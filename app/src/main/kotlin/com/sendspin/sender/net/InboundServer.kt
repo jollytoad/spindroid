@@ -38,7 +38,8 @@ class InboundServer(
     private val suite: NoiseSuite,
     private val port: Int,
     private val format: SourceAudioFormat,
-    private val capture: AudioCapture,
+    @Volatile
+    private var capture: AudioCapture,
     private val listener: Listener,
 ) {
     /** What the server tells the rest of the app. */
@@ -152,6 +153,22 @@ class InboundServer(
     }
 
     /** Stops the server, the capture, and every connection. */
+    /**
+     * Swaps the capture that feeds the pipeline.
+     *
+     * The pairing runs on a silent capture, and the consent swaps in the
+     * real one. The swap does not touch the connections, so a session
+     * that Music Assistant already dialed stays up, and the audio it
+     * asked for carries through it as soon as the stream is requested.
+     *
+     * @param newCapture the capture that takes over
+     */
+    fun swapCapture(newCapture: AudioCapture) {
+        newCapture.start(pipeline)
+        capture.stop()
+        capture = newCapture
+    }
+
     fun stop() {
         stopping = true
         pollTask?.cancel(true)

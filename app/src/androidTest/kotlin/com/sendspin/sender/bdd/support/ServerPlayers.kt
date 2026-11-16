@@ -38,7 +38,7 @@ object ServerPlayers {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val deadline = System.currentTimeMillis() + TIMEOUT_MILLIS
         while (System.currentTimeMillis() < deadline) {
-            val label = tryOne(context, label = true)
+            val label = tryOne(context, label = true, index = 0)
             if (label != null) return label
             Thread.sleep(RETRY_MILLIS)
         }
@@ -54,11 +54,27 @@ object ServerPlayers {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val deadline = System.currentTimeMillis() + TIMEOUT_MILLIS
         while (System.currentTimeMillis() < deadline) {
-            val id = tryOne(context, label = false)
+            val id = tryOne(context, label = false, index = 0)
             if (id != null) return id
             Thread.sleep(RETRY_MILLIS)
         }
         error("The server listed no player within ${TIMEOUT_MILLIS / 1000} seconds.")
+    }
+
+    /**
+     * The label of the second player the server offers.
+     *
+     * @throws IllegalStateException when the server lists no player in time
+     */
+    fun secondLabel(): String {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val deadline = System.currentTimeMillis() + TIMEOUT_MILLIS
+        while (System.currentTimeMillis() < deadline) {
+            val label = tryOne(context, label = true, index = 1)
+            if (label != null) return label
+            Thread.sleep(RETRY_MILLIS)
+        }
+        error("The server listed no player at 1 within ${TIMEOUT_MILLIS / 1000} seconds.")
     }
 
     /**
@@ -103,8 +119,22 @@ object ServerPlayers {
         return routedToPhone()
     }
 
-    /** One attempt to read the first player, or null while it fails. */
-    private fun tryOne(context: android.content.Context, label: Boolean): String? {
+    /**
+     * Waits until the server points no player at the phone, or gives up.
+     *
+     * @param timeoutMillis how long to wait for the answer
+     */
+    fun awaitNotRouted(timeoutMillis: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        while (System.currentTimeMillis() < deadline) {
+            if (!routedToPhone()) return true
+            Thread.sleep(POLL_MILLIS)
+        }
+        return !routedToPhone()
+    }
+
+    /** One attempt to read the player at an index, or null while it fails. */
+    private fun tryOne(context: android.content.Context, label: Boolean, index: Int = 0): String? {
         val accounts = MassAccountManager(context)
         if (accounts.token == null) return null
         val picker = MassPlayerManager(context, accounts)
@@ -115,7 +145,7 @@ object ServerPlayers {
                     picker.state.first { it.players.isNotEmpty() }
                 }
             } ?: return null
-            val player = state.players.first()
+            val player = state.players.getOrNull(index) ?: return null
             return if (label) player.label else player.playerId
         } catch (exception: IllegalStateException) {
             return null

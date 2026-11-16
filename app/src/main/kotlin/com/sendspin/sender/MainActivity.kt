@@ -38,6 +38,8 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.text.DateFormat
 import java.util.Date
 
@@ -56,6 +58,9 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val TAG = "SendSpin"
+
+        /** How often the app tries to start the picked player. */
+        const val ROUTE_ATTEMPTS = 10
     }
 
     /** The message the app shows under the fields. */
@@ -204,12 +209,12 @@ class MainActivity : ComponentActivity() {
                     sessionApps = sessionApps,
                     pickedSession = pickedSession,
                     playerPick = playerPick,
-                    onPickSession = { packageName -> SessionApps.pick(packageName) },
+                    onPickSession = { packageName -> pickSource(packageName) },
                     onSessionPlay = { packageName -> SessionApps.play(packageName) },
                     onSessionPause = { packageName -> SessionApps.pause(packageName) },
                     onPickPlayer = { playerId ->
                         playerPick = playerId
-                        routePlayer(playerId)
+                        players.startRouting(playerId)
                     },
 
                     onConnect = { connect() },
@@ -238,33 +243,6 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    /**
-     * The pick of the player is a choice of the screen, not of the server.
-     * Once the stream listens, the app tells the server to point the picked
-     * player at the phone, and retries until the server answers, because
-     * the server routes on its own clock.
-     *
-     * The router runs on the scope of this screen, so it survives a
-     * recomposition, and it ends with the screen.
-     */
-    private fun routePlayer(playerId: String) {
-        router?.cancel()
-        router = lifecycleScope.launch {
-            while (isActive) {
-                val routed = players.state.value.players.any {
-                    it.activeSource == players.sourceUri || it.activeSource == players.clientId
-                }
-                if (SessionStateHolder.running.value && !routed) {
-                    Log.i(TAG, "The server gets the routing of the player $playerId again")
-                    players.choose(playerId)
-                }
-                delay(2_000)
-            }
-        }
-    }
-
-    /** The coroutine that repeats the routing of the picked player. */
-    private var router: kotlinx.coroutines.Job? = null
 
     /**
      * Starts the capture.
@@ -273,6 +251,28 @@ class MainActivity : ComponentActivity() {
      * app asks for it first. The capture of the system audio needs the
      * record permission, and the service needs the notification permission.
      */
+    /**
+     * Picks the app that the capture follows.
+     *
+     * While the stream runs, the pick swaps the capture filter of the
+     * running projection on its own, and no consent dialog appears,
+     * because the projection carries the whole screen and only the filter
+     * changes. When the picked session is not among the read sessions, the
+     * stream keeps its source, and the line under the bar says so.
+     *
+     * @param packageName the package of the picked app
+     */
+    private fun pickSource(packageName: String) {
+        SessionApps.pick(packageName)
+        if (!SessionStateHolder.running.value) return
+        val uid = SessionApps.uidOf(packageName)
+        if (uid > 0) {
+            SendSpinService.switchSource(this, intArrayOf(uid))
+        } else {
+            message = getString(R.string.source_gone)
+        }
+    }
+
     private fun connect() {
         pendingStep = ::askForRecordPermission
         askFor(Manifest.permission.POST_NOTIFICATIONS)
@@ -316,6 +316,9 @@ class MainActivity : ComponentActivity() {
 
     /** Stops the service. */
     private fun disconnect() {
+        // The player that plays the phone goes quiet on its own source, so
+        // the stream does not carry on there after the phone disconnects.
+        players.stopRouting()
         stopService(Intent(this, SendSpinService::class.java))
     }
 

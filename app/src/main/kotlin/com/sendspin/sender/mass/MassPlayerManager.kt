@@ -14,7 +14,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +58,16 @@ class MassPlayerManager(
      * The address of the phone as a source.
      *
      * The server takes this address to mean the live audio of the phone.
+     */
+    /**
+     * The address of the phone as a source.
+     *
+     * Music Assistant claims the phone's live audio under this scheme
+     * address: it resolves to the device that the pairing created, and the
+     * claim that follows the selection asks the phone to stream. The
+     * command can refuse the claim while the phone is still settling, so
+     * the caller retries, and a plain device select is NOT a substitute:
+     * it answers with success and never claims.
      */
     val sourceUri: String = "$SOURCE_SCHEME$clientId"
 
@@ -111,6 +123,83 @@ class MassPlayerManager(
      *
      * @param playerId the player that should play the phone
      */
+    /** The coroutine that repeats the routing of the picked player. */
+    private var router: Job? = null
+
+    /** The player that the server last pointed at the phone. */
+    private var routedPlayerId: String? = null
+
+    /**
+     * Keeps the picked player pointed at the phone and playing.
+     *
+     * The router runs on the manager's own scope, until [stopRouting]:
+     * the select and the play retry while the phone listens, because the
+     * server claims the source on its own clock, and the play press stops
+     * once the audio flows. A pause that the user makes after the sound
+     * came is never fought.
+     *
+     * @param playerId the player that should play the phone
+     */
+    fun startRouting(playerId: String) {
+        router?.cancel()
+        val previousPlayerId = routedPlayerId
+        routedPlayerId = playerId
+        if (previousPlayerId != null && previousPlayerId != playerId) {
+            // The sound goes to the new player alone, so the old one is
+            // stopped rather than left playing a stream it no longer owns.
+            scope.launch {
+                withContext(Dispatchers.IO) {
+                    stopOnServer(previousPlayerId)
+                }
+            }
+        }
+        router = scope.launch {
+            var played = false
+            var attempts = 0
+            while (isActive) {
+                delay(2_000)
+                if (SessionStateHolder.running.value != true) {
+                    continue
+                }
+                val playing = SessionStateHolder.state.value.streaming ||
+                    SessionStateHolder.state.value.serverRequestedAudio
+                if (playing) played = true
+                if (played || attempts >= ROUTE_ATTEMPTS) continue
+                attempts += 1
+                withContext(Dispatchers.IO) {
+                    if (attempts % 2 == 0) {
+                        choose(playerId)
+                    } else {
+                        playPlayer(playerId)?.let { reason ->
+                            Log.i(TAG, "The player did not start: $reason")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Stops the routing, and quiets the player that played the phone.
+     *
+     * The server keeps the routing that a disconnect does not clear, so
+     * the stopped player would otherwise carry on with the lost stream:
+     * the command stops it together with the phone side.
+     */
+    fun stopRouting() {
+        router?.cancel()
+        router = null
+        val id = routedPlayerId
+        routedPlayerId = null
+        if (id != null) {
+            scope.launch {
+                withContext(Dispatchers.IO) {
+                    stopOnServer(id)
+                }
+            }
+        }
+    }
+
     fun choose(playerId: String) {
         val token = accounts.token ?: return
         val serverUrl = accounts.state.value.serverUrl
@@ -131,8 +220,22 @@ class MassPlayerManager(
                 client.selectSource(token, playerId, sourceUri)
             }
             Log.i(TAG, "The source of $playerId went to the server with $result")
+            if (result is SelectSourceResult.Success) {
+                routedPlayerId = playerId
+            }
             if (result is SelectSourceResult.Failure) {
                 publish(mutableState.value.copy(choosing = null, error = result.reason))
+                return@launch
+            }
+            // The routed player sits idle, and an idle player asks the
+            // phone for no audio. The app presses play on it, the way the
+            // source screen of Music Assistant does.
+            val playResult = withContext(Dispatchers.IO) {
+                client.playPlayer(token, playerId)
+            }
+            if (playResult != null) {
+                Log.i(TAG, "The player did not start: $playResult")
+                publish(mutableState.value.copy(choosing = null, error = playResult))
                 return@launch
             }
             // The server changes the player while the command runs, but the
@@ -156,8 +259,90 @@ class MassPlayerManager(
         }
     }
 
+    /**
+     * Starts the transport of one player.
+     *
+     * A player that points at the phone but sits idle asks the phone for
+     * no audio. The app presses play on it, the way the source screen of
+     * Music Assistant does.
+     *
+     * The call blocks on the network, so the caller runs it off the main
+     * thread.
+     *
+     * @param playerId the player that should play
+     * @return nothing, or the reason the server gave
+     */
+    fun playPlayer(playerId: String): String? {
+        val token = accounts.token ?: return "Sign in to Music Assistant first"
+        val serverUrl = accounts.state.value.serverUrl
+        if (serverUrl.isBlank()) {
+            return "The address of Music Assistant is not known yet"
+        }
+        return MusicAssistantClient(serverUrl).playerCommand(token, playerId, "play")
+    }
+
+    /**
+     * Sends one transport command to the player the screen picked.
+     *
+     * The call blocks on the network, so the caller runs it off the main
+     * thread.
+     *
+     * @param playerId the player that receives the command
+     * @param command the transport command, such as stop
+     * @return nothing, or the reason the server gave
+     */
+    private fun playerCommand(playerId: String, command: String): String? {
+        val token = accounts.token ?: return "Sign in to Music Assistant first"
+        val serverUrl = accounts.state.value.serverUrl
+        if (serverUrl.isBlank()) {
+            return "The address of Music Assistant is not known yet"
+        }
+        return MusicAssistantClient(serverUrl).playerCommand(token, playerId, command)
+    }
+
+    /**
+     * Stops the player that the routing pointed at, on a disconnect or a
+     * destination switch, so the old player goes quiet instead of playing
+     * the stream it no longer owns.
+     *
+     * @param playerId the player that should stop, or null for none
+     */
+    fun stopPlaying(playerId: String?) {
+        val id = playerId ?: return
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                stopOnServer(id)
+            }
+        }
+    }
+
+    /** Sends one transport command, and swallows the failure into the log. */
+    private fun stopOnServer(playerId: String, command: String = "stop") {
+        try {
+            playerCommand(playerId, command)?.let { reason ->
+                Log.i(TAG, "The command for $playerId was refused: $reason")
+            }
+        } catch (exception: java.io.IOException) {
+            Log.i(TAG, "The command for $playerId did not reach the server")
+            return
+        }
+        // The stop quiets the player, and the routing stays: the server
+        // still points the player at the phone. The select hands the
+        // player back to its own queue, so the phone is out of the path,
+        // and the server answers with nothing either way.
+        val token = accounts.token ?: return
+        val serverUrl = accounts.state.value.serverUrl
+        if (serverUrl.isBlank()) return
+        try {
+            MusicAssistantClient(serverUrl).selectSource(token, playerId, playerId)
+        } catch (exception: java.io.IOException) {
+            Log.i(TAG, "The deselection of $playerId did not reach the server")
+        }
+    }
+
     /** Stops the work that is running. */
     fun close() {
+        router?.cancel()
         scope.cancel()
     }
 
@@ -203,6 +388,9 @@ class MassPlayerManager(
 
         /** The address of a live source of the phone. */
         const val SOURCE_SCHEME = "sendspin_source://audio_source/"
+
+        /** How often the app tries to start the picked player. */
+        const val ROUTE_ATTEMPTS = 10
 
         /** The reason the server cannot play the phone yet. */
         const val REASON_NOT_LIVE =

@@ -122,10 +122,11 @@ class AutomaticPairing(
                 is PairingResult.Failed -> fail(result.reason)
             }
         } finally {
-            if (!captureRuns && !SessionStateHolder.running.value) {
-                // A capture may have started while the pairing ran, and it
-                // may not go: the stream belongs to the user, not to the
-                // pairing.
+            // A pairing that succeeded leaves the listener up: the session
+            // that the server dialed is the one that later carries the
+            // captured audio, and stopping it here would make the server
+            // lose the phone. Only a failed pairing stops the listener.
+            if (!captureRuns && mutableState.value !is AutomaticPairingState.Paired) {
                 appContext.stopService(Intent(appContext, SendSpinService::class.java))
             }
         }

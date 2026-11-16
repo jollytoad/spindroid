@@ -63,6 +63,7 @@ class SendSpinService : Service() {
             }
 
             ACTION_PAIR -> startPairingListener()
+            ACTION_SWITCH -> switchCaptureSource(uidsOf(intent))
             else -> startEverything(intent)
         }
         // The capture needs the permission and the media projection consent
@@ -94,17 +95,61 @@ class SendSpinService : Service() {
      */
     private fun startEverything(intent: Intent?) {
         if (inboundServer != null) {
-            if (!pairing) return
-            // The pairing listener holds the port that the capture wants.
-            // The pairing flow has done its work on the server side by the
-            // time the user connects, so the listener goes, with the
-            // service staying up for the capture.
-            advertiser?.stop()
-            advertiser = null
-            inboundServer?.stop()
-            inboundServer = null
-            PairingServiceHolder.reset()
+            if (pairing) {
+                // The pairing listener holds the server that Music
+                // Assistant already dialed, and the connection is the one
+                // that carries the audio later. Only the capture swaps
+                // from the silent one to the real one.
+                promoteCapture(intent) ?: return
+                return
+            }
+            return
         }
+        // The consent and the capture need a fresh start when no listener
+        // runs yet: the service brings the listener and the capture up
+        // together, so the phone is reachable from the first stream.
+        startFreshCapture(intent)
+    }
+
+    /**
+     * Swaps the silent capture of the pairing listener for the real one.
+     *
+     * @return null when the promotion succeeded, or the reason it failed,
+     *   in which case the service stops itself
+     */
+    private fun promoteCapture(intent: Intent?): String? {
+        pairing = false
+        val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
+        @Suppress("DEPRECATION")
+        val data = intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+        if (resultCode == 0 || data == null) {
+            Log.e(TAG, "The media projection has no consent")
+            stopSelf()
+            return "no consent"
+        }
+        // Android 14 wants the media projection foreground type in place
+        // before the projection is opened, so the type goes first.
+        startForegroundWithType(ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        publishRunning(true)
+        val projection = getSystemService(MediaProjectionManager::class.java)
+            .getMediaProjection(resultCode, data)
+        if (projection == null) {
+            Log.e(TAG, "The media projection could not be opened")
+            stopSelf()
+            return "no projection"
+        }
+        mediaProjection = projection
+        val captureSource = SystemAudioCapture(projection, matchingUids = uidsOf(intent))
+        capture = captureSource
+        CaptureStatusHolder.publishRunning(true)
+        CaptureStatusHolder.publishError(null)
+        inboundServer?.swapCapture(captureSource)
+        Log.i(TAG, "The paired listener took the real capture")
+        return null
+    }
+
+    /** Starts the listener and the capture from nothing. */
+    private fun startFreshCapture(intent: Intent?) {
         pairing = false
         startForegroundWithType(ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         publishRunning(true)
@@ -147,6 +192,28 @@ class SendSpinService : Service() {
         PairingServiceHolder.publishError(null)
         startForegroundWithType(ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         startListening(SilentCapture())
+    }
+
+    /**
+     * Swaps the capture of the running stream for one that follows a new
+     * app.
+     *
+     * The media projection is still valid, so no consent dialog appears:
+     * the projection carries the whole screen, and only the filter on top
+     * of it changes.
+     *
+     * @param uids the uids the new capture follows, or none for the mix
+     */
+    private fun switchCaptureSource(uids: IntArray) {
+        val projection = mediaProjection ?: return
+        if (capture == null || !capture!!.isRunning) return
+        capture?.stop()
+        val newCapture = SystemAudioCapture(projection, matchingUids = uids)
+        inboundServer?.swapCapture(newCapture)
+        capture = newCapture
+        CaptureStatusHolder.publishRunning(true)
+        CaptureStatusHolder.publishError(null)
+        Log.i(TAG, "The capture follows the picked source now")
     }
 
     /**
@@ -294,6 +361,9 @@ class SendSpinService : Service() {
         /** The action that listens without a capture, so a server can pair the phone. */
         const val ACTION_PAIR = "com.sendspin.sender.PAIR"
 
+        /** The action that swaps the capture of the running stream. */
+        const val ACTION_SWITCH = "com.sendspin.sender.SWITCH"
+
         /** The extra that holds the consent result of the media projection. */
         const val EXTRA_RESULT_CODE = "result_code"
 
@@ -308,8 +378,25 @@ class SendSpinService : Service() {
             intent?.getIntArrayExtra(EXTRA_UIDS) ?: IntArray(0)
 
         /**
-         * Starts the listener without a capture.
+         * Starts the service with a switched capture filter.
          *
+         * The media projection is not touched, so no consent is needed for
+         * a source switch while the stream runs.
+         *
+         * @param context the context that starts the service
+         * @param uids the uids the capture follows, or none for the mix
+         */
+        fun switchSource(context: Context, uids: IntArray?) {
+            val intent = Intent(context, SendSpinService::class.java)
+                .setAction(ACTION_SWITCH)
+            if (uids != null && uids.isNotEmpty()) {
+                intent.putExtra(EXTRA_UIDS, uids)
+            }
+            context.startForegroundService(intent)
+        }
+
+        /**
+         * Starts the listener without a capture.
          * Music Assistant has to connect to the phone before it can pair
          * it. The listener therefore starts before the user allows the
          * screen capture.

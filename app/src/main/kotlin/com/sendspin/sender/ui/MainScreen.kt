@@ -131,7 +131,6 @@ fun MainScreen(
                     SourceCard(
                         apps = sessionApps,
                         picked = pickedSession,
-                        locked = running,
                         onPick = onPickSession,
                         onPlay = onSessionPlay,
                         onPause = onSessionPause,
@@ -157,7 +156,6 @@ fun MainScreen(
                     SourceCard(
                         apps = sessionApps,
                         picked = pickedSession,
-                        locked = running,
                         onPick = onPickSession,
                         onPlay = onSessionPlay,
                         onPause = onSessionPause,
@@ -249,7 +247,6 @@ private fun TopBar(
 private fun SourceCard(
     apps: List<SessionApps.SessionApp>,
     picked: String?,
-    locked: Boolean,
     onPick: (String) -> Unit,
     onPlay: (String) -> Unit,
     onPause: (String) -> Unit,
@@ -274,16 +271,9 @@ private fun SourceCard(
                     SourceRow(
                         app = app,
                         picked = app.packageName == picked,
-                        locked = locked,
                         onPick = { onPick(app.packageName) },
                         onPlay = { onPlay(app.packageName) },
                         onPause = { onPause(app.packageName) },
-                    )
-                }
-                if (locked) {
-                    Text(
-                        text = stringResource(R.string.source_locked),
-                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
@@ -296,7 +286,6 @@ private fun SourceCard(
 private fun SourceRow(
     app: SessionApps.SessionApp,
     picked: Boolean,
-    locked: Boolean,
     onPick: () -> Unit,
     onPlay: () -> Unit,
     onPause: () -> Unit,
@@ -304,11 +293,11 @@ private fun SourceRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = !locked, onClick = onPick),
+            .clickable(onClick = onPick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        RadioButton(selected = picked, onClick = onPick, enabled = !locked)
+        RadioButton(selected = picked, onClick = onPick)
         Column(modifier = Modifier.weight(1f)) {
             Text(text = app.label, style = MaterialTheme.typography.bodyLarge)
             app.nowPlaying?.let { line ->
@@ -384,19 +373,13 @@ private fun DestinationCard(
                                 names = players.allPlayers.associate { it.playerId to it.label },
                                 picked = playerPick == player.playerId,
                                 busy = players.choosing == player.playerId,
-                                canPick = !running && player.available,
+                                canPick = player.available,
                                 onPick = { onPick(player.playerId) },
                             )
                         }
                     }
                     players.error?.let { message ->
                         Text(text = message, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (running) {
-                        Text(
-                            text = stringResource(R.string.destination_locked),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
                     }
                 }
 

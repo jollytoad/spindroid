@@ -106,45 +106,6 @@ object AdminApi {
     }
 
     /**
-     * Starts the player that points at the phone.
-     *
-     * A player that sits idle asks the phone for no audio, so the scenario
-     * starts the transport the way a listener would press play on it.
-     *
-     * @param playerId the identifier that [awaitPlayer] returned
-     */
-    fun playPlayer(serverUrl: String, token: String, playerId: String) {
-        command(
-            serverUrl = serverUrl,
-            token = token,
-            name = "players/cmd/play",
-            args = JSONObject()
-                .put("player_id", playerId)
-                .put("command", "play"),
-        )
-    }
-
-    /**
-     * The raw list of the players, for a diagnosis that a person reads.
-     */
-    fun dumpPlayers(serverUrl: String, token: String): String {
-        val body = JSONObject()
-            .put("message_id", UUID.randomUUID().toString())
-            .put("command", "players/all")
-            .put("args", JSONObject())
-        val connection = URL("$serverUrl${MusicAssistantClient.PATH_API}")
-            .openConnection() as HttpURLConnection
-        connection.requestMethod = "POST"
-        connection.doOutput = true
-        connection.setRequestProperty("Content-Type", "application/json")
-        connection.setRequestProperty("Authorization", "Bearer $token")
-        return connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-            .let {
-                connection.inputStream.bufferedReader().use { reader -> reader.readText() }
-            }
-    }
-
-    /**
      * Removes the pairing of the phone from the server.
      *
      * The phone must be connected, because the server can only remove a

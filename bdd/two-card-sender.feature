@@ -77,23 +77,26 @@ Feature: The two-card sender screen
     When "Disconnect" is pressed
     Then the stream stops
     And the capture stops
+    And the destination stops playing the phone
     And "Tidal" stays picked on the Source card
     And the first player stays picked on the Destination card
     And the control reads "Connect"
 
   @requires-music-assistant
-  Scenario: The Source card is read-only while streaming
+  Scenario: The source changes while streaming
     Given the stream sends Tidal's audio to the first player
-    When the Source card is viewed
-    Then the Source radios are disabled
-    And the card says to disconnect before picking another source
+    When Spotify starts a media session
+    And "Spotify" is picked on the Source card
+    Then the stream plays Spotify's audio
 
   @requires-music-assistant
-  Scenario: The Destination card is read-only while streaming
+  Scenario: The destination changes while streaming
     Given the stream sends Tidal's audio to the first player
-    When the Destination card is viewed
-    Then the Destination radios are disabled
-    And the card says to disconnect before picking another player
+    When the second player is picked on the Destination card
+    Then the stream plays to the second player
+    When "Disconnect" is pressed
+    Then the stream stops
+    And the destination stops playing the phone
 
   @requires-music-assistant
   Scenario: The picked source vanishes mid-stream

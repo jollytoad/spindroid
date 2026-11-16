@@ -328,30 +328,7 @@ class TwoCardSteps {
     @Then("the phone streams to the first player")
     fun thePhoneStreamsToTheFirstPlayer() {
         val routed = ServerPlayers.awaitRouted(AWAIT_STREAM_MILLIS)
-        if (!routed) {
-            dumpScreen("route")
-            error("The server never pointed a player at the phone.")
-        }
-        // A player that sits idle asks the phone for no audio, so the step
-        // starts the transport the way a listener would press play on it.
-        // The player answers on its own clock, and a player that is waking
-        // up may refuse once, so the press retries.
-        RealServer.find()
-        val server = RealServer.found
-            ?: error("The scenario needs a Music Assistant on the network.")
-        val token = AdminApi.signIn(server.url)
-        val playerId = ServerPlayers.firstId()
         val requested = awaitSilently(AWAIT_STREAM_MILLIS) {
-            try {
-                AdminApi.playPlayer(
-                    serverUrl = server.url,
-                    token = token,
-                    playerId = playerId,
-                )
-            } catch (exception: IllegalStateException) {
-                // The player wakes on its own clock; the next press comes
-                // with the next poll.
-            }
             SessionStateHolder.state.value.streaming ||
                 SessionStateHolder.state.value.serverRequestedAudio
         }
@@ -370,6 +347,46 @@ class TwoCardSteps {
             Thread.sleep(POLL_MILLIS)
         }
         return condition()
+    }
+
+    @And("the destination stops playing the phone")
+    fun theDestinationStopsPlayingThePhone() {
+        check(ServerPlayers.awaitNotRouted(AWAIT_STREAM_MILLIS)) {
+            "The server still points a player at the phone."
+        }
+    }
+
+    @When("the second player is picked on the Destination card")
+    fun secondPlayerIsPicked() {
+        val label = ServerPlayers.secondLabel()
+        composeRule.onNode(row(label)).performScrollTo().performClick()
+        composeRule.waitForIdle()
+    }
+
+    @Then("the stream plays to the second player")
+    fun theStreamPlaysToTheSecondPlayer() {
+        check(ServerPlayers.awaitRouted(AWAIT_STREAM_MILLIS)) {
+            "The server never pointed the second player at the phone."
+        }
+        val requested = awaitSilently(AWAIT_STREAM_MILLIS) {
+            SessionStateHolder.state.value.streaming ||
+                SessionStateHolder.state.value.serverRequestedAudio
+        }
+        check(requested) { "The server did not request the audio for the second player." }
+    }
+
+    @Then("the stream plays {word}'s audio")
+    fun theStreamPlaysTheAppsAudio(app: String) {
+        // The pick swaps the capture filter of the running projection, and
+        // no consent dialog comes, so only the stream state tells it.
+        val keptPlaying = awaitSilently(AWAIT_STREAM_MILLIS) {
+            CaptureStatusHolder.state.value.running &&
+                (SessionStateHolder.state.value.streaming ||
+                    SessionStateHolder.state.value.serverRequestedAudio)
+        }
+        check(keptPlaying) {
+            "The stream did not carry on with $app as the source."
+        }
     }
 
     @Then("the notification offers Stop")
@@ -411,53 +428,6 @@ class TwoCardSteps {
         check(radio.config[SemanticsProperties.Selected]) {
             "The first player is not picked."
         }
-    }
-
-    @When("the {word} card is viewed")
-    fun cardIsViewed(title: String) {
-        val label = if (title == "Source") {
-            context.getString(R.string.title_source)
-        } else {
-            context.getString(R.string.title_destination)
-        }
-        composeRule.onNodeWithText(label).performScrollTo().assertIsDisplayed()
-    }
-
-    @Then("the Source radios are disabled")
-    fun theSourceRadiosAreDisabled() {
-        radioDisabledIn("Tidal")
-    }
-
-    @Then("the Destination radios are disabled")
-    fun theDestinationRadiosAreDisabled() {
-        radioDisabledIn(ServerPlayers.firstLabel())
-    }
-
-    /** Reads the radio of one row, and requires the disabled state. */
-    private fun radioDisabledIn(name: String) {
-        val node = composeRule.onNodeWithText(name, substring = true)
-            .performScrollTo()
-            .fetchSemanticsNode()
-        val radio = node.children.firstOrNull {
-            runCatching { it.config[SemanticsProperties.Selected] }.getOrNull() != null
-        } ?: error("The row of $name has no radio to read.")
-        check(runCatching { radio.config[SemanticsProperties.Disabled] }.getOrNull() != null) {
-            "The radio of $name is not disabled."
-        }
-    }
-
-    @And("the card says to disconnect before picking another source")
-    fun theCardSaysToDisconnectForSources() {
-        composeRule.onNodeWithText(
-            context.getString(R.string.source_locked),
-        ).performScrollTo().assertIsDisplayed()
-    }
-
-    @And("the card says to disconnect before picking another player")
-    fun theCardSaysToDisconnectForPlayers() {
-        composeRule.onNodeWithText(
-            context.getString(R.string.destination_locked),
-        ).performScrollTo().assertIsDisplayed()
     }
 
     @And("a status line under the bar says the source vanished")
