@@ -188,7 +188,8 @@ round-3 contract for the tap-through mock and then the wiring.
 6. **The list is live.** The Source rows subscribe to session changes.
    An app that starts a session appears; an app that drops its session
    leaves, mid-stream included, and behaviour 7 covers that case. No
-   refresh button exists.
+   refresh button exists. The rows read in the alphabetical order of
+   the app labels, so a start and a stop of an app do not move its row.
 7. **Source teardown mid-stream.** If the picked app's session dies while
    the stream runs, the Source card shows the app's row as gone and a
    status line under the bar says the source vanished. The stream keeps
