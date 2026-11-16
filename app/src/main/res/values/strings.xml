@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SendSpin</string>
+    <string name="app_name">SpinDroid</string>
+
+    <!-- The two cards. -->
+    <string name="title_source">Source</string>
+    <string name="title_destination">Destination</string>
+    <string name="source_empty">No app holds a media session. Play something, then this list fills in.</string>
+    <string name="action_play">Play</string>
+    <string name="action_pause">Pause</string>
 
     <!-- The Music Assistant that the phone found. -->
-    <string name="title_server">Music Assistant</string>
     <string name="server_searching">Looking for Music Assistant on the local network…</string>
     <string name="server_explanation">This is the Music Assistant that the phone found. Sign in to choose the player, or pair the phone as an input.</string>
     <string name="option_sign_in">Sign into Music Assistant</string>
     <string name="option_pair">Pair with Music Assistant</string>
 
     <!-- The main screen. -->
-    <string name="title_start">Send to Music Assistant</string>
-    <string name="start_explanation">The phone sends the sound it plays. Music Assistant finds the phone on the local network, so both must be on the same network.</string>
     <string name="action_connect">Connect</string>
     <string name="action_disconnect">Disconnect</string>
     <string name="action_copy_token">Copy token</string>
@@ -43,8 +47,6 @@
     <string name="action_sign_out">Sign out</string>
 
     <!-- The choice of the player that plays the phone. -->
-    <string name="title_players">Play on</string>
-    <string name="players_explanation">Choose the speaker that the sound of the phone goes to.</string>
     <string name="players_sign_in_first">Sign in to Music Assistant first.</string>
     <string name="players_loading">Reading the players from the server…</string>
     <string name="players_none">The server has no player that can play sound.</string>
@@ -92,7 +94,7 @@
     <string name="notification_waiting">Waiting for the server</string>
     <string name="notification_streaming">Sending audio</string>
     <string name="notification_disconnected">Disconnected</string>
-    <string name="notification_idle">SendSpin is ready</string>
+    <string name="notification_idle">SpinDroid is ready</string>
     <string name="notification_text">No server yet</string>
     <string name="notification_stop">Stop</string>
     <string name="notification_pairing">Pairing with Music Assistant</string>

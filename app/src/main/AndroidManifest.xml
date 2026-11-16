@@ -52,6 +52,17 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection|connectedDevice" />
 
+        <!-- The listener that hands the media sessions to the Source card.
+             The system binds to it, and the user grants the access once. -->
+        <service
+            android:name=".capture.PlayingAppsListener"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
     </application>
 
 </manifest>

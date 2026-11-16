@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sendspin.protocol.crypto.X25519
 import com.sendspin.protocol.pairing.PairingToken
 import com.sendspin.sender.capture.CaptureStatusHolder
+import com.sendspin.sender.capture.SessionApps
 import com.sendspin.sender.mass.AutomaticPairing
 import com.sendspin.sender.mass.MassAccountManager
 import com.sendspin.sender.mass.MassDiscovery
@@ -121,6 +123,20 @@ class MainActivity : ComponentActivity() {
             val foundServer by discovery.server.collectAsStateWithLifecycle()
             val discoveryError by discovery.error.collectAsStateWithLifecycle()
 
+            val sessionApps by SessionApps.apps.collectAsStateWithLifecycle()
+            val pickedSession by SessionApps.picked.collectAsStateWithLifecycle()
+
+            // The sessions come from the media sessions of the device, so
+            // the reader starts with the screen and stops with it.
+            LaunchedEffect(Unit) { SessionApps.start(applicationContext) }
+            DisposableEffect(Unit) {
+                onDispose { SessionApps.stop() }
+            }
+
+            // The pick of the player is a choice of the screen, not of the
+            // server. The server learns it when the Connect control starts.
+            var playerPick by rememberSaveable { mutableStateOf<String?>(null) }
+
             // The sign in form lives on a page of its own. The page closes
             // when the sign in works, and the main page shows the account
             // then.
@@ -166,10 +182,15 @@ class MainActivity : ComponentActivity() {
                     account = account,
                     players = playerList,
                     automaticPairing = automaticPairing,
-                    sourceUri = players.sourceUri,
-                    clientId = players.clientId,
                     discoveredServer = foundServer,
                     discoveryError = discoveryError,
+                    sessionApps = sessionApps,
+                    pickedSession = pickedSession,
+                    playerPick = playerPick,
+                    onPickSession = { packageName -> SessionApps.pick(packageName) },
+                    onSessionPlay = { packageName -> SessionApps.play(packageName) },
+                    onSessionPause = { packageName -> SessionApps.pause(packageName) },
+                    onPickPlayer = { playerId -> playerPick = playerId },
                     onConnect = { connect() },
                     onDisconnect = { disconnect() },
                     onCopyToken = { copyToken() },
@@ -177,9 +198,8 @@ class MainActivity : ComponentActivity() {
                     onSignOut = {
                         pairing.reset()
                         accounts.signOut()
+                        playerPick = null
                     },
-                    onRefreshPlayers = { players.refresh() },
-                    onChoosePlayer = { playerId -> players.choose(playerId) },
                 )
             }
         }

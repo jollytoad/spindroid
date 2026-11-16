@@ -9,6 +9,7 @@ import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.Properties
 import javax.inject.Inject
 
@@ -185,6 +186,24 @@ abstract class RunBddTask : DefaultTask() {
             }
             append(" com.sendspin.sender.test/io.cucumber.android.runner.CucumberAndroidJUnitRunner")
         }
+        val adbFile = adb.get().asFile
+
+        // The steps drive the screen, so the permissions that the screen
+        // would otherwise ask for are in place before the run. The grants
+        // fail when they are already in place, and nothing changes then.
+        grantQuietly(
+            adbFile,
+            "pm grant com.sendspin.sender android.permission.POST_NOTIFICATIONS",
+        )
+        grantQuietly(
+            adbFile,
+            "pm grant com.sendspin.sender android.permission.RECORD_AUDIO",
+        )
+        grantQuietly(
+            adbFile,
+            "cmd notification allow_listener com.sendspin.sender/" +
+                "com.sendspin.sender.capture.PlayingAppsListener",
+        )
         execOperations.exec {
             executable(adb.get().asFile.absolutePath)
             // The command is one string, because adb joins separate
@@ -203,6 +222,25 @@ abstract class RunBddTask : DefaultTask() {
     /** Wraps a value for the shell on the device. */
     private fun shellQuote(value: String): String =
         "'" + value.replace("'", "'\\''") + "'"
+
+    /**
+     * Runs a grant on the device, and keeps silent about the failure.
+     *
+     * A granted permission answers with an error, and the error means
+     * that the grant is in place already.
+     */
+    private fun grantQuietly(adbFile: File, command: String) {
+        try {
+            execOperations.exec {
+                executable(adbFile)
+                args("shell", command)
+            }
+        } catch (exception: Exception) {
+            // The grant may be in place, or the device may be known to
+            // need it. The scenarios fail with a clear step otherwise.
+            logger.lifecycle("Pre-run permission ignored: ${exception.message}")
+        }
+    }
 }
 
 tasks.register<RunBddTask>("runBdd") {
