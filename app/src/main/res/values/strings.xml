@@ -28,6 +28,7 @@
     <string name="title_pairing">Pairing</string>
     <string name="pairing_explanation">Paste this token into Music Assistant, on the screen where a new input is paired. The token never changes, so the same one works for every server.</string>
     <string name="pairing_paired">The phone is paired with Music Assistant.</string>
+    <string name="pairing_kept">The phone keeps its pairing with %1\$s. The server uses it again as soon as the phone streams.</string>
     <string name="pairing_in_progress">The phone is pairing with Music Assistant. This can take a while.</string>
     <string name="pairing_failed">The phone could not pair with Music Assistant: %1$s</string>
     <string name="pairing_code_instruction">Type this code in Music Assistant.</string>
@@ -61,7 +62,7 @@
     <string name="title_status">Status</string>
     <string name="label_connection">Connection</string>
     <string name="label_server_name">Server</string>
-    <string name="label_paired">Paired</string>
+    <string name="label_paired">Session pairing</string>
     <string name="label_paired_servers">Paired servers</string>
     <string name="label_clock_error">Clock error</string>
     <string name="label_stream">Stream</string>

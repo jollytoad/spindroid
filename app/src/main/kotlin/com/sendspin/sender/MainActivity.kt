@@ -135,6 +135,13 @@ class MainActivity : ComponentActivity() {
             val sessionApps by SessionApps.apps.collectAsStateWithLifecycle()
             val pickedSession by SessionApps.picked.collectAsStateWithLifecycle()
 
+            // The pairings that the phone keeps, read once here and again
+            // whenever a pairing could have arrived or gone.
+            var keptPairings by mutableStateOf(keys.longTermRecords())
+            LaunchedEffect(state.paired, automaticPairing) {
+                keptPairings = keys.longTermRecords()
+            }
+
             // The sessions come from the media sessions of the device, so
             // the reader starts with the screen and stops with it.
             LaunchedEffect(Unit) { SessionApps.start(applicationContext) }
@@ -191,6 +198,7 @@ class MainActivity : ComponentActivity() {
                     account = account,
                     players = playerList,
                     automaticPairing = automaticPairing,
+                    keptPairings = keptPairings,
                     discoveredServer = foundServer,
                     discoveryError = discoveryError,
                     sessionApps = sessionApps,

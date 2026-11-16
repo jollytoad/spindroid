@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.sendspin.mass.MassPlayer
 import com.sendspin.protocol.pairing.PairingCode
+import com.sendspin.protocol.psk.PskRecord
 import com.sendspin.protocol.session.SessionPhase
 import com.sendspin.protocol.session.SourceSessionState
 import com.sendspin.sender.R
@@ -64,6 +65,7 @@ fun MainScreen(
     account: MassAccountState,
     players: MassPlayerState,
     automaticPairing: AutomaticPairingState,
+    keptPairings: List<PskRecord>,
     discoveredServer: DiscoveredServer?,
     discoveryError: String?,
     sessionApps: List<SessionApps.SessionApp>,
@@ -185,6 +187,7 @@ fun MainScreen(
             pairingCode = state.pairingCode,
             serverConnected = state.serverName != null,
             paired = state.paired,
+            keptPairings = keptPairings,
             automaticPairing = automaticPairing,
             signedIn = account.signedIn,
             administrator = account.administrator,
@@ -489,6 +492,7 @@ private fun PairingSection(
     pairingCode: String?,
     serverConnected: Boolean,
     paired: Boolean,
+    keptPairings: List<PskRecord>,
     automaticPairing: AutomaticPairingState,
     signedIn: Boolean,
     administrator: Boolean,
@@ -541,6 +545,14 @@ private fun PairingSection(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
+
+                keptPairings.isNotEmpty() -> Text(
+                    text = stringResource(
+                        R.string.pairing_kept,
+                        keptPairings.joinToString { it.serverName },
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
 
                 manual -> Text(
                     text = stringResource(R.string.pairing_explanation),
