@@ -111,3 +111,11 @@ internal data class SelectSourceArgs(
     @Json(name = "player_id") val playerId: String,
     val source: String,
 )
+
+/** The envelope of the command that drives one player's transport. */
+@JsonClass(generateAdapter = true)
+internal data class PlayerCommandRequest(
+    @Json(name = "message_id") val messageId: String,
+    val command: String,
+    val args: Map<String, String>,
+)

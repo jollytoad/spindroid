@@ -29,6 +29,7 @@ public class MusicAssistantClient(
     )
     private val playersAllAdapter = moshi.adapter(PlayersAllRequest::class.java)
     private val selectSourceAdapter = moshi.adapter(SelectSourceRequest::class.java)
+    private val playerCommandAdapter = moshi.adapter(PlayerCommandRequest::class.java)
     private val playerSetupAdapter = moshi.adapter(PlayerSetupRequest::class.java)
     private val flowIdAdapter = moshi.adapter(FlowIdRequest::class.java)
     private val flowSubmitAdapter = moshi.adapter(FlowSubmitRequest::class.java)
@@ -145,6 +146,47 @@ public class MusicAssistantClient(
         }
         return SelectSourceResult.Success
     }
+
+    /**
+     * Sends one transport command to a player.
+     *
+     * The server answers with nothing when the command did what it was
+     * asked. It also answers with nothing when it did not.
+     *
+     * @param token the token of the signed in account
+     * @param playerId the player that receives the command
+     * @param command the transport command, such as play or stop
+     * @return nothing, or the reason the server gave
+     */
+    public fun playerCommand(token: String, playerId: String, command: String): String? {
+        val request = PlayerCommandRequest(
+            messageId = UUID.randomUUID().toString(),
+            command = COMMAND_PLAYER_COMMAND + command,
+            args = mapOf("player_id" to playerId),
+        )
+        val body = playerCommandAdapter.toJson(request).toByteArray(Charsets.UTF_8)
+        return try {
+            post(body, token)
+            null
+        } catch (exception: ApiException) {
+            "Music Assistant refused the command: ${exception.reason}"
+        } catch (exception: IOException) {
+            "Music Assistant did not answer: ${exception.message}"
+        }
+    }
+
+    /**
+     * Starts the transport of one player.
+     *
+     * A player that points at the phone but sits idle asks the phone for
+     * no audio, so the app presses play on it right after it routed it.
+     *
+     * @param token the token of the signed in account
+     * @param playerId the player that should play
+     * @return nothing, or the reason the server gave
+     */
+    public fun playPlayer(token: String, playerId: String): String? =
+        playerCommand(token, playerId, "play")
 
     /**
      * Starts the setup flow of a player.
@@ -331,6 +373,9 @@ public class MusicAssistantClient(
 
         /** The name of the command that points a player at a source. */
         public const val COMMAND_SELECT_SOURCE: String = "players/cmd/select_source"
+
+        /** The prefix of the commands that drive the transport of a player. */
+        public const val COMMAND_PLAYER_COMMAND: String = "players/cmd/"
 
         /** The name of the command that starts the setup flow of a player. */
         public const val COMMAND_PLAYER_SETUP: String = "config/players/setup"
