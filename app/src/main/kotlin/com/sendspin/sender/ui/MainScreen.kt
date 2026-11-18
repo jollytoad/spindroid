@@ -65,6 +65,7 @@ fun MainScreen(
     onPickSession: (String) -> Unit,
     onSessionPlay: (String) -> Unit,
     onSessionPause: (String) -> Unit,
+    onOpenSession: (String) -> Unit,
     onPickPlayer: (String) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
@@ -130,6 +131,7 @@ fun MainScreen(
                         onPause = onSessionPause,
                         onOpenFinder = onOpenFinder,
                         onDiscard = onDiscard,
+                        onOpen = onOpenSession,
                         modifier = Modifier.weight(1f),
                     )
                     DestinationCard(
@@ -157,6 +159,7 @@ fun MainScreen(
                         onPause = onSessionPause,
                         onOpenFinder = onOpenFinder,
                         onDiscard = onDiscard,
+                        onOpen = onOpenSession,
                     )
                     DestinationCard(
                         server = discoveredServer,

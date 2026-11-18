@@ -10,6 +10,7 @@
     <string name="action_pause">Pause</string>
     <string name="source_vanished">The app that played is gone. The stream keeps sending silence until you disconnect.</string>
     <string name="source_gone">The app is gone, so the stream keeps its source. Pick again.</string>
+    <string name="open_app">Open %1$s</string>
 
     <!-- The finder of the Source card. -->
     <string name="finder_open">Find the installed media apps</string>

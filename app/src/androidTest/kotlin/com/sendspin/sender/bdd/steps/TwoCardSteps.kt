@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -141,10 +142,10 @@ class TwoCardSteps {
     @When("{word} is pressed on the {word} row")
     fun transportIsPressedOnTheRow(button: String, app: String) {
         composeRule.waitForIdle()
-        // Every row carries both words, so the press names its row and
-        // reads the button inside it.
+        // The one transport button carries its verb as the description,
+        // so the press names its row and reads the button inside it.
         composeRule.onNode(
-            hasText(button) and hasAnyAncestor(row(app)),
+            hasContentDescription(button) and hasAnyAncestor(row(app)),
         ).performClick()
         composeRule.waitForIdle()
     }
@@ -275,13 +276,11 @@ class TwoCardSteps {
 
     @Then("{string} stays picked on the Source card")
     fun appStaysPicked(app: String) {
-        // The radio of a row is its own merge boundary, so the row node
-        // carries no toggle state of its own. The step reads the children.
+        // The row is its own selection control, so its own state says
+        // whether the pick holds it.
         val node = composeRule.onNode(row(app)).fetchSemanticsNode()
-        val radio = node.children.firstOrNull {
-            runCatching { it.config[SemanticsProperties.Selected] }.getOrNull() == true
-        } ?: error("The row of $app has no radio to read.")
-        check(radio.config[SemanticsProperties.Selected]) {
+        val selected = node.config.getOrElse(SemanticsProperties.Selected) { false }
+        check(selected) {
             "The row of $app is not picked."
         }
     }

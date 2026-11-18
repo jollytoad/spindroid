@@ -232,6 +232,7 @@ class MainActivity : ComponentActivity() {
                     snackbarHostState = snackbar,
                     onSessionPlay = { packageName -> SessionApps.play(packageName) },
                     onSessionPause = { packageName -> SessionApps.pause(packageName) },
+                    onOpenSession = { packageName -> openApp(packageName) },
                     onPickPlayer = { playerId ->
                         playerPick = playerId
                         players.startRouting(playerId)
