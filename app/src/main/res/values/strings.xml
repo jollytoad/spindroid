@@ -13,7 +13,6 @@
 
     <!-- The finder of the Source card. -->
     <string name="finder_open">Find the installed media apps</string>
-    <string name="not_running">Not running — tap to pick and open</string>
     <string name="discarded">%1$s discarded</string>
     <string name="action_undo">Undo</string>
 

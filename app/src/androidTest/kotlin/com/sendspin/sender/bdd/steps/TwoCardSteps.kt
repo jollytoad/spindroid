@@ -204,16 +204,6 @@ class TwoCardSteps {
         composeRule.waitForIdle()
     }
 
-    @Then("the Source card lists {string} as not running")
-    fun theSourceCardListsAsNotRunning(app: String) {
-        composeRule.onNode(row(app)).assertIsDisplayed()
-        // The merged row carries its own texts, so the not-running line
-        // reads from the row itself, not from a child of it.
-        composeRule.onNode(
-            hasText(context.getString(R.string.not_running)) and hasText(app, substring = true),
-        ).assertIsDisplayed()
-    }
-
     @Then("the rows read {string}")
     fun theRowsRead(theRows: String) {
         composeRule.waitForIdle()

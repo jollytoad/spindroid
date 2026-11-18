@@ -126,8 +126,8 @@ Feature: The two-card sender screen
     Given the app is open
     And the finder offers "Mellow" and "Radio" as installed media apps
     When the plus is chosen
-    Then the Source card lists "Mellow" as not running
-    And the Source card lists "Radio" as not running
+    Then the Source card lists Mellow
+    And the Source card lists Radio
 
   @discovery
   Scenario: Discovered rows read among the sessions, alphabetically

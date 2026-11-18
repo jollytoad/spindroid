@@ -455,8 +455,8 @@ private fun DiscardBand(progress: Float) {
 }
 
 /**
- * The face of one discovered app: its initial, its name, and the line
- * that says it is not running. The face covers the band at rest.
+ * The face of one discovered app: its initial and its name, dimmed
+ * beside the session rows. The face covers the band at rest.
  */
 @Composable
 private fun DiscoveredFace(
@@ -495,11 +495,6 @@ private fun DiscoveredFace(
         Text(
             text = app.label,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = stringResource(R.string.not_running),
-            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
