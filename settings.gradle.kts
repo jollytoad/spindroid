@@ -14,8 +14,8 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "sendspin-sender"
+rootProject.name = "spindroid-sender"
 
 include(":app")
-include(":sendspin-protocol")
-include(":music-assistant-client")
+include(":sendspin")
+include(":mass")

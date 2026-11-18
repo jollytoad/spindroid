@@ -45,7 +45,7 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SendSpin">
+        android:theme="@style/Theme.SpinDroid">
 
         <activity
             android:name=".MainActivity"
@@ -57,7 +57,7 @@
         </activity>
 
         <service
-            android:name=".service.SendSpinService"
+            android:name=".service.SpindroidService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection|connectedDevice" />
 

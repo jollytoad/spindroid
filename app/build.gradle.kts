@@ -21,11 +21,11 @@ plugins {
 }
 
 android {
-    namespace = "com.sendspin.sender"
+    namespace = "app.gubbins.spindroid"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.sendspin.sender"
+        applicationId = "app.gubbins.spindroid"
         minSdk = 33
         targetSdk = 36
         versionCode = 1
@@ -93,8 +93,8 @@ android {
 }
 
 dependencies {
-    implementation(project(":sendspin-protocol"))
-    implementation(project(":music-assistant-client"))
+    implementation(project(":sendspin"))
+    implementation(project(":mass"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -196,7 +196,7 @@ abstract class RunBddTask : DefaultTask() {
                 append(" -e bdd.password ")
                 append(shellQuote(accountPassword))
             }
-            append(" com.sendspin.sender.test/io.cucumber.android.runner.CucumberAndroidJUnitRunner")
+            append(" app.gubbins.spindroid.test/io.cucumber.android.runner.CucumberAndroidJUnitRunner")
         }
         val adbFile = adb.get().asFile
 
@@ -205,16 +205,16 @@ abstract class RunBddTask : DefaultTask() {
         // fail when they are already in place, and nothing changes then.
         grantQuietly(
             adbFile,
-            "pm grant com.sendspin.sender android.permission.POST_NOTIFICATIONS",
+            "pm grant app.gubbins.spindroid android.permission.POST_NOTIFICATIONS",
         )
         grantQuietly(
             adbFile,
-            "pm grant com.sendspin.sender android.permission.RECORD_AUDIO",
+            "pm grant app.gubbins.spindroid android.permission.RECORD_AUDIO",
         )
         grantQuietly(
             adbFile,
-            "cmd notification allow_listener com.sendspin.sender/" +
-                "com.sendspin.sender.capture.PlayingAppsListener",
+            "cmd notification allow_listener app.gubbins.spindroid/" +
+                "app.gubbins.spindroid.capture.PlayingAppsListener",
         )
         execOperations.exec {
             executable(adb.get().asFile.absolutePath)

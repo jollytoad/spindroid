@@ -1,0 +1,217 @@
+package app.gubbins.sendspin.noise
+
+import app.gubbins.sendspin.crypto.NoiseSuite
+import org.junit.jupiter.api.Assertions.assertArrayEquals
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+
+/**
+ * The handshake against the official Noise test vectors.
+ *
+ * The vectors come from the cacophony suite, which is the corpus the Noise
+ * specification points at. They cover the `KKpsk2` pattern with both cipher
+ * suites, and every other Noise implementation is tested against the same
+ * vectors.
+ *
+ * The prologue in these vectors is the one cacophony uses. SendSpin uses the
+ * raw bytes of its init messages instead, but the pattern and the key
+ * schedule are the same, so these vectors pin the key schedule.
+ *
+ * The payloads are raw bytes rather than text, because some of them hold
+ * characters that do not survive a round trip through a source file.
+ */
+class Kkpsk2VectorTest {
+    private fun hex(s: String): ByteArray {
+        require(s.length % 2 == 0) { "A hex string has an even length" }
+        return ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+    }
+
+    private fun assertHex(expected: String, actual: ByteArray) {
+        assertEquals(expected, actual.joinToString("") { "%02x".format(it) })
+    }
+
+    /** Which side sent a transport message. */
+    private enum class TransportSender {
+        INITIATOR,
+        RESPONDER,
+    }
+
+    /** One transport message from the vector. */
+    private class TransportMessage(
+        val payload: String,
+        val ciphertext: String,
+        val sender: TransportSender,
+    )
+
+    /** The vectors for one suite. */
+    private class Vector(
+        val suite: NoiseSuite,
+        val prologue: String,
+        val psk: String,
+        val initiatorStaticPrivate: String,
+        val initiatorStaticPublic: String,
+        val responderStaticPrivate: String,
+        val responderStaticPublic: String,
+        val initiatorEphemeral: String,
+        val responderEphemeral: String,
+        val handshakeHash: String,
+        val message1: String,
+        val message1Payload: String,
+        val message2: String,
+        val message2Payload: String,
+        val transport: List<TransportMessage>,
+    )
+
+    private val vectors = listOf(
+        Vector(
+            suite = NoiseSuite.CHACHA_POLY_SHA256,
+            prologue = "4a6f686e2047616c74",
+            psk = "54686973206973206d7920417573747269616e20706572737065637469766521",
+            initiatorStaticPrivate = "e61ef9919cde45dd5f82166404bd08e38bceb5dfdfded0a34c8df7ed542214d1",
+            initiatorStaticPublic = "6bc3822a2aa7f4e6981d6538692b3cdf3e6df9eea6ed269eb41d93c22757b75a",
+            responderStaticPrivate = "4a3acbfdb163dec651dfa3194dece676d437029c62a408b4c5ea9114246e4893",
+            responderStaticPublic = "31e0303fd6418d2f8c0e78b91f22e8caed0fbe48656dcf4767e4834f701b8f62",
+            initiatorEphemeral = "893e28b9dc6ca8d611ab664754b8ceb7bac5117349a4439a6b0569da977c464a",
+            responderEphemeral = "bbdb4cdbd309f1a1f2e1456967fe288cadd6f712d65dc7b7793d5e63da6b375b",
+            handshakeHash = "7f3c5fdcdd3767e2835473a2683971490339f5bbeee82c3690bc606e14db70ed",
+            message1 = "ca35def5ae56cec33dc2036731ab14896bc4c75dbb07a61f879f8e3afa4c7944babf6443250c604872e33233c3b9a29df5c6d334ae2d53f1bd7f0b265a716b37",
+            message1Payload = "4c756477696720766f6e204d69736573",
+            message2 = "95ebc60d2b1fa672c1f46a8aa265ef51bfe38e7ccb39ec5be34069f14480884366a1f5f0d79fe93ae476bd1897a7a8ae92764898aa5d49e07b5849f35865ba",
+            message2Payload = "4d757272617920526f746862617264",
+            transport = listOf(
+                TransportMessage(
+                    payload = "462e20412e20486179656b",
+                    ciphertext = "2eb2686b8814a7c0178fe18bfeeafe3e07312d69486d45e6572546",
+                    sender = TransportSender.INITIATOR,
+                ),
+                TransportMessage(
+                    payload = "4361726c204d656e676572",
+                    ciphertext = "eea5791a890cd573a5c2e2345a8f98b0d1f0727acd24584fcddde5",
+                    sender = TransportSender.RESPONDER,
+                ),
+                TransportMessage(
+                    payload = "4a65616e2d426170746973746520536179",
+                    ciphertext = "ab2e1a411abaaa3df9cb497dffe4cfb70af6c71f0815b3c33b35e22329dee72f3e",
+                    sender = TransportSender.INITIATOR,
+                ),
+                TransportMessage(
+                    payload = "457567656e2042f6686d20766f6e2042617765726b",
+                    ciphertext = "ed22a0392c6afbfd6a6adea92b1faf13c4df24072f7060a20b1500609621c6957ac86d82f9",
+                    sender = TransportSender.RESPONDER,
+                ),
+            ),
+        ),
+        Vector(
+            suite = NoiseSuite.AES_GCM_SHA256,
+            prologue = "4a6f686e2047616c74",
+            psk = "54686973206973206d7920417573747269616e20706572737065637469766521",
+            initiatorStaticPrivate = "e61ef9919cde45dd5f82166404bd08e38bceb5dfdfded0a34c8df7ed542214d1",
+            initiatorStaticPublic = "6bc3822a2aa7f4e6981d6538692b3cdf3e6df9eea6ed269eb41d93c22757b75a",
+            responderStaticPrivate = "4a3acbfdb163dec651dfa3194dece676d437029c62a408b4c5ea9114246e4893",
+            responderStaticPublic = "31e0303fd6418d2f8c0e78b91f22e8caed0fbe48656dcf4767e4834f701b8f62",
+            initiatorEphemeral = "893e28b9dc6ca8d611ab664754b8ceb7bac5117349a4439a6b0569da977c464a",
+            responderEphemeral = "bbdb4cdbd309f1a1f2e1456967fe288cadd6f712d65dc7b7793d5e63da6b375b",
+            handshakeHash = "1d2be5b73c43962fa87db816e6b5a73a0d67053e29b3d89fcee6ae299b5a5c1f",
+            message1 = "ca35def5ae56cec33dc2036731ab14896bc4c75dbb07a61f879f8e3afa4c794483cf298f1bfed916ea20d8f528bd30670670c7245e236a68f021b5a521d8bf31",
+            message1Payload = "4c756477696720766f6e204d69736573",
+            message2 = "95ebc60d2b1fa672c1f46a8aa265ef51bfe38e7ccb39ec5be34069f14480884332b32e0f483ae58a9c36e93390a9c2238918bda6ae0ebfe48a400b8f565f5f",
+            message2Payload = "4d757272617920526f746862617264",
+            transport = listOf(
+                TransportMessage(
+                    payload = "462e20412e20486179656b",
+                    ciphertext = "f7cf1f47885fa5ff7cefecf3db3066f89b996834069b8f1517c55a",
+                    sender = TransportSender.INITIATOR,
+                ),
+                TransportMessage(
+                    payload = "4361726c204d656e676572",
+                    ciphertext = "ce7de28a6b54b559d3db2f7482f1be3264a62165f12a73e377ebde",
+                    sender = TransportSender.RESPONDER,
+                ),
+                TransportMessage(
+                    payload = "4a65616e2d426170746973746520536179",
+                    ciphertext = "da4173c5aa84756d0eab64adfbe81f10538b099966897771a071502ee2899e2fbd",
+                    sender = TransportSender.INITIATOR,
+                ),
+                TransportMessage(
+                    payload = "457567656e2042f6686d20766f6e2042617765726b",
+                    ciphertext = "1a1e3408acea689f5cced09b246e13e68e1ce146e8f1b3478482593b988587be99ba7595d2",
+                    sender = TransportSender.RESPONDER,
+                ),
+            ),
+        ),
+    )
+
+    private fun Vector.initiator() = Kkpsk2Handshake.initiator(
+        suite = suite,
+        prologue = hex(prologue),
+        localStaticPrivate = hex(initiatorStaticPrivate),
+        remoteStaticPublic = hex(responderStaticPublic),
+        ephemeralPrivate = hex(initiatorEphemeral),
+    )
+
+    private fun Vector.responder() = Kkpsk2Handshake.responder(
+        suite = suite,
+        prologue = hex(prologue),
+        localStaticPrivate = hex(responderStaticPrivate),
+        remoteStaticPublic = hex(initiatorStaticPublic),
+        ephemeralPrivate = hex(responderEphemeral),
+    )
+
+    @Test
+    fun `the handshake matches the official vectors`() {
+        for (vector in vectors) {
+            val initiator = vector.initiator()
+            val responder = vector.responder()
+            val psk = hex(vector.psk)
+            val payload1 = hex(vector.message1Payload)
+            val payload2 = hex(vector.message2Payload)
+
+            val message1 = initiator.writeMessage1(payload1)
+            assertHex(vector.message1, message1)
+            assertArrayEquals(payload1, responder.readMessage1(message1))
+
+            val message2 = responder.writeMessage2(payload2, psk)
+            assertHex(vector.message2, message2)
+
+            assertArrayEquals(payload2, initiator.readMessage2(message2, psk))
+            assertHex(vector.handshakeHash, initiator.handshakeHash)
+            assertHex(vector.handshakeHash, responder.handshakeHash)
+        }
+    }
+
+    @Test
+    fun `the transport messages match the official vectors`() {
+        for (vector in vectors) {
+            val initiator = vector.initiator()
+            val responder = vector.responder()
+            val psk = hex(vector.psk)
+
+            val message1 = initiator.writeMessage1(hex(vector.message1Payload))
+            responder.readMessage1(message1)
+            val message2 = responder.writeMessage2(hex(vector.message2Payload), psk)
+            initiator.readMessage2(message2, psk)
+
+            val initiatorTransport = initiator.split()
+            val responderTransport = responder.split()
+
+            for (message in vector.transport) {
+                val payload = hex(message.payload)
+                val expected = hex(message.ciphertext)
+                when (message.sender) {
+                    TransportSender.INITIATOR -> {
+                        val sent = initiatorTransport.encrypt(payload)
+                        assertHex(message.ciphertext, sent)
+                        assertArrayEquals(payload, responderTransport.decrypt(sent))
+                    }
+
+                    TransportSender.RESPONDER -> {
+                        val sent = responderTransport.encrypt(payload)
+                        assertHex(message.ciphertext, sent)
+                        assertArrayEquals(payload, initiatorTransport.decrypt(sent))
+                    }
+                }
+                assertEquals(expected.size, hex(message.ciphertext).size)
+            }
+        }
+    }
+}
