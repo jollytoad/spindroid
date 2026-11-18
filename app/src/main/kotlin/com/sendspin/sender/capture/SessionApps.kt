@@ -35,7 +35,7 @@ class PlayingAppsListener : NotificationListenerService()
  */
 object SessionApps {
 
-    /** One app that holds a media session. */
+    /** One app that holds a media session, or that the finder found. */
     data class SessionApp(
         val packageName: String,
         val label: String,
@@ -49,12 +49,27 @@ object SessionApps {
         val canPlay: Boolean,
         /** Whether the session honours the pause command right now. */
         val canPause: Boolean,
+        /** Whether the app holds a session, or only answered the finder. */
+        val holdsSession: Boolean = true,
     )
 
-    private val mutableApps = MutableStateFlow<List<SessionApp>>(emptyList())
+    // The sessions the app holds right now, before the finder offers join.
+    private val mutableSessions = MutableStateFlow<List<SessionApp>>(emptyList())
 
-    /** The apps that hold a session, playing ones first. */
-    val apps: StateFlow<List<SessionApp>> = mutableApps.asStateFlow()
+    // The offers the finder found, and the packages the user discarded.
+    private val mutableOffers = MutableStateFlow<List<SessionApp>>(emptyList())
+    private val mutableDiscarded = MutableStateFlow<Set<String>>(emptySet())
+
+    /** What the Source card shows: the sessions and the finder offers. */
+    val apps: StateFlow<List<SessionApp>>
+        get() = mutableDisplay.asStateFlow()
+
+    private val mutableDisplay = MutableStateFlow<List<SessionApp>>(emptyList())
+
+    /** Computes what the card shows from the sessions, the offers, the discards. */
+    private fun refreshDisplay() {
+        mutableDisplay.value = visibleApps(mutableSessions.value, mutableOffers.value, mutableDiscarded.value)
+    }
 
     private val mutablePicked = MutableStateFlow<String?>(null)
 
@@ -64,7 +79,7 @@ object SessionApps {
     /** Whether the picked package is still among the listed apps. */
     fun pickedIsLive(): Boolean {
         val picked = mutablePicked.value ?: return false
-        return mutableApps.value.any { it.packageName == picked }
+        return mutableDisplay.value.any { it.packageName == picked }
     }
 
     /**
@@ -109,6 +124,87 @@ object SessionApps {
     private var retryPending = false
 
     /**
+     * The finder: the question the plus asks, and its answer.
+     *
+     * The plus is a choice of the screen, so the app probes the installed
+     * apps only when the user asks. A test stands in for the probe, so a
+     * BDD scenario names a known list of apps instead of reading the
+     * device it runs on.
+     */
+    fun interface MediaAppFinder {
+        fun installedMediaApps(): List<SessionApp>
+    }
+
+    private var finder: MediaAppFinder? = null
+
+    /**
+     * Offers the apps the user asked the finder for.
+     *
+     * The step says the apps are installed, so the probe is replaced with
+     * the answer it should give. The plus tap then reads this answer.
+     */
+    fun offerInstalled(vararg labels: String) {
+        finder = MediaAppFinder {
+            labels.mapIndexed { index, label ->
+                SessionApp(
+                    packageName = label.lowercase(),
+                    label = label,
+                    uid = OFFER_UID_BASE + index,
+                    playingNow = false,
+                    nowPlaying = null,
+                    canPlay = false,
+                    canPause = false,
+                    holdsSession = false,
+                )
+            }
+        }
+    }
+
+    /** Runs the finder, and offers what it finds to the card. */
+    fun runFinder() {
+        val found = finder?.installedMediaApps() ?: return
+        mutableOffers.value = found
+        refreshDisplay()
+    }
+
+    /** Whether the package came from the finder, and holds no session. */
+    fun isDiscovered(packageName: String): Boolean =
+        mutableOffers.value.any { it.packageName == packageName }
+
+    /** Drops one app from the offers, and keeps the drop across restarts. */
+    fun discard(packageName: String) {
+        mutableDiscarded.value = mutableDiscarded.value + packageName
+        storeDiscarded()
+        refreshDisplay()
+    }
+
+    /** Takes one dropped app back, when the snackbar undo runs. */
+    fun undoDiscard(packageName: String) {
+        mutableDiscarded.value = mutableDiscarded.value - packageName
+        storeDiscarded()
+        refreshDisplay()
+    }
+
+    /** Forgets every discard. The test hook uses it to start clean. */
+    fun resetDiscards() {
+        mutableDiscarded.value = emptySet()
+        storeDiscarded()
+        refreshDisplay()
+    }
+
+    private fun storeDiscarded() {
+        val appContext = context ?: return
+        val preferences = appContext.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
+        preferences.edit().putStringSet(KEY_DISCARDED, mutableDiscarded.value).apply()
+    }
+
+    private fun loadDiscarded(): Set<String> {
+        val appContext = context ?: return emptySet()
+        val preferences = appContext.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
+        return preferences.getStringSet(KEY_DISCARDED, emptySet())?.toSet() ?: emptySet()
+    }
+
+    /**
      * Starts the session reading.
      *
      * The registration fails with a security exception when the user has
@@ -119,6 +215,8 @@ object SessionApps {
         stop()
         context = appContext
         manager = appContext.getSystemService(MediaSessionManager::class.java)
+        mutableDiscarded.value = loadDiscarded()
+        finder = InstalledMediaApps(appContext)
         val changed = MediaSessionManager.OnActiveSessionsChangedListener {
             read(appContext)
         }
@@ -154,7 +252,11 @@ object SessionApps {
         handlers.clear()
         handler.removeCallbacksAndMessages(null)
         retryPending = false
-        mutableApps.value = emptyList()
+        mutableSessions.value = emptyList()
+        mutableOffers.value = emptyList()
+        mutableDiscarded.value = emptySet()
+        finder = null
+        refreshDisplay()
         context = null
     }
 
@@ -172,6 +274,36 @@ object SessionApps {
             { it.nowPlaying?.lowercase() ?: "" },
         ),
     )
+
+    /**
+     * The rows the Source card carries: the sessions and the finder offers.
+     *
+     * The offers join the sessions in the alphabetical order, and a
+     * discarded offer stays away. An offer whose app holds a session
+     * leaves, because the session row already speaks for that app, and
+     * one row per app keeps the card honest. The name decides: the label
+     * means the same app in both reads, and so does the session title
+     * that carries the app's name on its lines.
+     */
+    fun visibleApps(
+        sessions: List<SessionApp>,
+        offers: List<SessionApp>,
+        discarded: Set<String>,
+    ): List<SessionApp> {
+        val sessionNames = sessions.flatMapTo(mutableSetOf()) { session ->
+            buildSet {
+                add(session.label.lowercase())
+                val title = session.nowPlaying?.lowercase()
+                if (title != null) {
+                    title.split(Regex("\\W+")).filterTo(this) { it.isNotEmpty() }
+                }
+            }
+        }
+        val visible = sessions + offers.filter { offer ->
+            offer.packageName !in discarded && offer.label.lowercase() !in sessionNames
+        }
+        return rowOrder(visible)
+    }
 
     /** Picks the app the capture should follow, by package name. */
     fun pick(packageName: String) {
@@ -253,7 +385,8 @@ object SessionApps {
         }
         handlers.clear()
         handlers.putAll(fresh)
-        mutableApps.value = rowOrder(list)
+        mutableSessions.value = list
+        refreshDisplay()
     }
 
     /** One row of the list, or null when the app cannot be named. */
@@ -317,4 +450,9 @@ object SessionApps {
 
     private const val TAG = "SendSpin"
     private const val RETRY_MILLIS = 2_000L
+    private const val FILE_NAME = "spindroid_source_apps"
+    private const val KEY_DISCARDED = "discarded"
+
+    /** The first uid the test finder hands out: none of a real app. */
+    private const val OFFER_UID_BASE = 90_000
 }

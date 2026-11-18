@@ -10,9 +10,12 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.performTouchInput
 import kotlin.math.abs
 import com.sendspin.sender.R
 import com.sendspin.sender.bdd.support.AdminApi
@@ -22,10 +25,12 @@ import com.sendspin.sender.bdd.support.RealServer
 import com.sendspin.sender.bdd.support.ServerPlayers
 import com.sendspin.sender.bdd.support.TestSession
 import com.sendspin.sender.capture.CaptureStatusHolder
+import com.sendspin.sender.capture.SessionApps
 import com.sendspin.sender.session.SessionStateHolder
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.cucumber.java.After
+import io.cucumber.java.Before
 import io.cucumber.java.en.And
 import io.cucumber.java.en.Given
 import io.cucumber.java.en.Then
@@ -51,6 +56,14 @@ class TwoCardSteps {
     @After
     fun turnPortraitAgain() {
         composeRule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+
+    @Before
+    fun startClean() {
+        // The discards persist for the user, one scenario at a time, so
+        // a swipe that the previous scenario made never hides a row here.
+        TestSession.release()
+        SessionApps.resetDiscards()
     }
 
     @Given("no media app holds a session")
@@ -89,10 +102,10 @@ class TwoCardSteps {
         composeRule.waitForIdle()
     }
 
-    @When("Spotify starts a media session")
-    fun spotifyStartsAMediaSession() {
-        TestSession.start(title("Spotify"), playing = true)
-        waitForRow("Spotify")
+    @When("{word} starts a media session")
+    fun appStartsAMediaSession(app: String) {
+        TestSession.start(title(app), playing = true)
+        waitForRow(app)
     }
 
     @When("Spotify drops its media session")
@@ -172,6 +185,71 @@ class TwoCardSteps {
         ).assertIsDisplayed()
     }
 
+    @Given("the finder offers {string} and {string} as installed media apps")
+    fun theFinderOffersTwo(one: String, two: String) {
+        SessionApps.offerInstalled(one, two)
+    }
+
+    @Given("the finder offers {string} as an installed media app")
+    fun theFinderOffersOne(one: String) {
+        SessionApps.offerInstalled(one)
+    }
+
+    @When("the plus is chosen")
+    fun thePlusIsChosen() {
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.finder_open),
+        ).performClick()
+        composeRule.waitForIdle()
+    }
+
+    @Then("the Source card lists {string} as not running")
+    fun theSourceCardListsAsNotRunning(app: String) {
+        composeRule.onNode(row(app)).assertIsDisplayed()
+        // The merged row carries its own texts, so the not-running line
+        // reads from the row itself, not from a child of it.
+        composeRule.onNode(
+            hasText(context.getString(R.string.not_running)) and hasText(app, substring = true),
+        ).assertIsDisplayed()
+    }
+
+    @Then("the rows read {string}")
+    fun theRowsRead(theRows: String) {
+        composeRule.waitForIdle()
+        // The card reads its rows top to bottom, so each row must sit
+        // below the one the step named before it.
+        var previous = -Float.MAX_VALUE
+        theRows.split(", ").forEach { name ->
+            val y = composeRule.onNode(row(name)).fetchSemanticsNode()
+                .positionInRoot.y
+            check(y > previous) {
+                "The row of ${'$'}name did not read after the one above: y=${'$'}y of ${'$'}{theRows}."
+            }
+            previous = y
+        }
+    }
+
+    @When("the {word} row is swiped aside")
+    fun theRowIsSwipedAside(app: String) {
+        composeRule.waitForIdle()
+        composeRule.onNode(row(app)).performTouchInput { swipeLeft() }
+        composeRule.waitForIdle()
+    }
+
+    @Then("the finder does not offer {string} again")
+    fun theFinderDoesNotOfferAgain(app: String) {
+        // The probe runs again through the plus, and the discard list
+        // keeps the app away.
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.finder_open),
+        ).performClick()
+        composeRule.waitForIdle()
+        composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(row(app)).fetchSemanticsNodes().isEmpty()
+        }
+    }
+
     @Then("the Source card lists {word}")
     fun theSourceCardLists(app: String) {
         composeRule.onNode(row(app)).assertIsDisplayed()
@@ -180,7 +258,7 @@ class TwoCardSteps {
     @Then("the Source card no longer lists {word}")
     fun theSourceCardNoLongerLists(app: String) {
         composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
-            composeRule.onAllNodesWithText(app, substring = true).fetchSemanticsNodes().isEmpty()
+            composeRule.onAllNodes(row(app)).fetchSemanticsNodes().isEmpty()
         }
     }
 

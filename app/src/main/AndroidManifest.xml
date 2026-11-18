@@ -26,6 +26,15 @@
         android:name="android.permission.ACCESS_LOCAL_NETWORK"
         tools:targetApi="36" />
 
+    <!-- The finder of the Source card reads which apps carry a media
+         browser service. Without this declaration the package manager
+         answers an empty list, and it does not say so. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
+    </queries>
+
     <!-- The keys are bound to the device keystore, so a restored copy is
          useless. Turn the backup off, so a restore never leaves the app with
          keys that it cannot decrypt. -->

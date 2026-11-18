@@ -11,6 +11,12 @@
     <string name="source_vanished">The app that played is gone. The stream keeps sending silence until you disconnect.</string>
     <string name="source_gone">The app is gone, so the stream keeps its source. Pick again.</string>
 
+    <!-- The finder of the Source card. -->
+    <string name="finder_open">Find the installed media apps</string>
+    <string name="not_running">Not running — tap to pick and open</string>
+    <string name="discarded">%1$s discarded</string>
+    <string name="action_undo">Undo</string>
+
     <!-- The Music Assistant that the phone found. -->
     <string name="server_searching">Looking for Music Assistant on the local network…</string>
     <string name="server_explanation">This is the Music Assistant that the phone found. Sign in to choose the player, or pair the phone as an input.</string>

@@ -13,10 +13,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -128,6 +132,8 @@ class MainActivity : ComponentActivity() {
         pairing.start()
 
         setContent {
+            // The discards of the Source card undo from the snackbar.
+            val snackbar = remember { SnackbarHostState() }
             val state by SessionStateHolder.state.collectAsStateWithLifecycle()
             val serviceRuns by SessionStateHolder.running.collectAsStateWithLifecycle()
             val captureStatus by CaptureStatusHolder.state.collectAsStateWithLifecycle()
@@ -221,6 +227,9 @@ class MainActivity : ComponentActivity() {
                     pickedSession = pickedSession,
                     playerPick = playerPick,
                     onPickSession = { packageName -> pickSource(packageName) },
+                    onOpenFinder = { SessionApps.runFinder() },
+                    onDiscard = { packageName -> discardWithUndo(packageName, snackbar) },
+                    snackbarHostState = snackbar,
                     onSessionPlay = { packageName -> SessionApps.play(packageName) },
                     onSessionPause = { packageName -> SessionApps.pause(packageName) },
                     onPickPlayer = { playerId ->
@@ -275,12 +284,44 @@ class MainActivity : ComponentActivity() {
      */
     private fun pickSource(packageName: String) {
         SessionApps.pick(packageName)
+        // A discovered app holds no session yet, so the pick arms it and
+        // opens it: the audio arrives when the user plays there.
+        if (SessionApps.isDiscovered(packageName)) openApp(packageName)
         if (!SessionStateHolder.running.value) return
         val uid = SessionApps.uidOf(packageName)
         if (uid > 0) {
             SendSpinService.switchSource(this, intArrayOf(uid))
         } else {
             message = getString(R.string.source_gone)
+        }
+    }
+
+    /**
+     * Drops one discovered app, and offers the undo in the snackbar.
+     *
+     * The row leaves at once; the undo only takes the drop back when
+     * the snackbar is still on the screen.
+     */
+    private fun discardWithUndo(packageName: String, snackbar: SnackbarHostState) {
+        val label = SessionApps.apps.value
+            .firstOrNull { it.packageName == packageName }?.label ?: packageName
+        SessionApps.discard(packageName)
+        lifecycleScope.launch {
+            val answer = snackbar.showSnackbar(
+                message = getString(R.string.discarded, label),
+                actionLabel = getString(R.string.action_undo),
+                duration = SnackbarDuration.Short,
+            )
+            if (answer == SnackbarResult.ActionPerformed) {
+                SessionApps.undoDiscard(packageName)
+            }
+        }
+    }
+
+    /** Opens one installed app in the foreground, or stays quiet. */
+    private fun openApp(packageName: String) {
+        packageManager.getLaunchIntentForPackage(packageName)?.let { intent ->
+            startActivity(intent)
         }
     }
 

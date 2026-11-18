@@ -126,6 +126,61 @@ class SessionAppsFollowTest {
         }
     }
 
+    @Test
+    fun `the finder offers read among the sessions`() {
+        val rows = SessionApps.visibleApps(
+            sessions = listOf(app("Tidal", playing = true)),
+            offers = listOf(offer("Radio"), offer("Mellow")),
+            discarded = emptySet(),
+        )
+        check(rows.map { it.label } == listOf("Mellow", "Radio", "Tidal")) {
+            "The rows must read alphabetically, which gives ${rows.map { it.label }}."
+        }
+    }
+
+    @Test
+    fun `a finder offer leaves when its app holds a session`() {
+        val rows = SessionApps.visibleApps(
+            sessions = listOf(app("Tidal", playing = true)),
+            offers = listOf(offer("Tidal")),
+            discarded = emptySet(),
+        )
+        check(rows.size == 1) {
+            "The app must not carry two rows, but the rows read ${rows.map { it.label }}."
+        }
+    }
+
+    @Test
+    fun `a discarded finder offer stays away`() {
+        val rows = SessionApps.visibleApps(
+            sessions = listOf(app("Tidal", playing = true)),
+            offers = listOf(offer("Radio"), offer("Mellow")),
+            discarded = setOf("radio"),
+        )
+        check(rows.map { it.label } == listOf("Mellow", "Tidal")) {
+            "The discarded app must not come back, which gives ${rows.map { it.label }}."
+        }
+    }
+
+    @Test
+    fun `a finder offer leaves when a session row names it`() {
+        // The session row shows the title as its line, so the app the
+        // line names must not carry a second, not-running row.
+        val row = app("SpinDroid", playing = false).copy(nowPlaying = "Tidal — the BDD session")
+        val rows = SessionApps.visibleApps(
+            sessions = listOf(row),
+            offers = listOf(offer("Tidal")),
+            discarded = emptySet(),
+        )
+        check(rows.size == 1) {
+            "The titled session must speak for the app, which gives ${rows.map { it.label }}."
+        }
+    }
+
+    /** One app that answered the finder, and holds no session. */
+    private fun offer(name: String): SessionApp = app(name, playing = false)
+        .copy(nowPlaying = null, holdsSession = false)
+
     private fun app(name: String, playing: Boolean): SessionApp = SessionApp(
         packageName = name.lowercase(),
         label = name,
