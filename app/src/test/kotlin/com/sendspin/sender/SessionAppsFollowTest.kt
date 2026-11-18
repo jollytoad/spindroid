@@ -177,6 +177,23 @@ class SessionAppsFollowTest {
         }
     }
 
+    @Test
+    fun `a finder offer leaves when its package holds the session`() {
+        // The service label can differ from the app label, so the
+        // package is the identity the merge trusts: the app that starts
+        // a session loses its discovered row, whatever the labels read.
+        val session = app("SoundThing", playing = false)
+        val offered = offer("SoundThing Service").copy(packageName = session.packageName)
+        val rows = SessionApps.visibleApps(
+            sessions = listOf(session),
+            offers = listOf(offered),
+            discarded = emptySet(),
+        )
+        check(rows.size == 1) {
+            "The session must speak for the package, which gives ${rows.map { it.label }}."
+        }
+    }
+
     /** One app that answered the finder, and holds no session. */
     private fun offer(name: String): SessionApp = app(name, playing = false)
         .copy(nowPlaying = null, holdsSession = false)

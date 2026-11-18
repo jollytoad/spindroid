@@ -281,15 +281,19 @@ object SessionApps {
      * The offers join the sessions in the alphabetical order, and a
      * discarded offer stays away. An offer whose app holds a session
      * leaves, because the session row already speaks for that app, and
-     * one row per app keeps the card honest. The name decides: the label
-     * means the same app in both reads, and so does the session title
-     * that carries the app's name on its lines.
+     * one row per app keeps the card honest. The package is the
+     * identity the merge trusts first, because a service label can
+     * differ from the app label. The names cover the harness, where a
+     * test session plays under another package: the label means the
+     * same app in both reads, and so does the session title that
+     * carries the app's name on its lines.
      */
     fun visibleApps(
         sessions: List<SessionApp>,
         offers: List<SessionApp>,
         discarded: Set<String>,
     ): List<SessionApp> {
+        val sessionPackages = sessions.mapTo(mutableSetOf()) { it.packageName }
         val sessionNames = sessions.flatMapTo(mutableSetOf()) { session ->
             buildSet {
                 add(session.label.lowercase())
@@ -300,7 +304,9 @@ object SessionApps {
             }
         }
         val visible = sessions + offers.filter { offer ->
-            offer.packageName !in discarded && offer.label.lowercase() !in sessionNames
+            offer.packageName !in discarded &&
+                offer.packageName !in sessionPackages &&
+                offer.label.lowercase() !in sessionNames
         }
         return rowOrder(visible)
     }

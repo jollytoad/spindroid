@@ -144,6 +144,14 @@ Feature: The two-card sender screen
     Then the rows read "Tidal"
 
   @discovery
+  Scenario: A discovered row switches to a session row on arrival
+    Given the finder offers "Mellow" as an installed media app
+    When the plus is chosen
+    And "Mellow" is picked on the Source card
+    And Mellow starts a media session
+    Then the rows read "Mellow"
+
+  @discovery
   Scenario: A swipe discards a discovered app
     Given the finder offers "Radio" and "Tidal" as installed media apps
     When the plus is chosen
