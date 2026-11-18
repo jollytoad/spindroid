@@ -44,12 +44,23 @@ object TestSession {
                 override fun onPlay() = setState(true)
                 override fun onPause() = setState(false)
             })
-            fresh.setMetadata(
-                MediaMetadata.Builder()
-                    .putString(MediaMetadata.METADATA_KEY_TITLE, title)
-                    .build(),
-            )
+            fresh.setMetadata(metadataOf(title))
             fresh.setPlaybackState(stateOf(playing))
+            fresh.isActive = true
+            sessionMedia = fresh
+        }
+    }
+
+    /**
+     * Starts a session whose playback state offers no transport action,
+     * so the row that reads it carries no button at all.
+     */
+    fun startUnresponsive(title: String) {
+        onMain {
+            releaseNow()
+            val fresh = MediaSession(context, "SpinDroid BDD session")
+            fresh.setMetadata(metadataOf(title))
+            fresh.setPlaybackState(stateOf(playing = false, actions = 0L))
             fresh.isActive = true
             sessionMedia = fresh
         }
@@ -81,13 +92,25 @@ object TestSession {
         sessionMedia?.setPlaybackState(stateOf(playing))
     }
 
-    private fun stateOf(playing: Boolean): PlaybackState = PlaybackState.Builder()
-        .setActions(
-            // Spotify publishes only the play-pause action, so the row
-            // buttons must read that mask as the cover of both.
-            PlaybackState.ACTION_PLAY_PAUSE
-                or PlaybackState.ACTION_SEEK_TO,
-        )
+    /** The title that the session's metadata carries. */
+    private fun metadataOf(title: String): MediaMetadata = MediaMetadata.Builder()
+        .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+        .build()
+
+    /**
+     * The playback state of the session, with the actions it honours.
+     *
+     * The default mask is the one Spotify publishes: some apps offer
+     * only the play-pause action, and the row buttons must read that
+     * mask as the cover of both. A session that honours nothing
+     * carries no actions, and its row carries no button.
+     */
+    private fun stateOf(
+        playing: Boolean,
+        actions: Long = PlaybackState.ACTION_PLAY_PAUSE
+            or PlaybackState.ACTION_SEEK_TO,
+    ): PlaybackState = PlaybackState.Builder()
+        .setActions(actions)
         .setState(
             if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
             0,

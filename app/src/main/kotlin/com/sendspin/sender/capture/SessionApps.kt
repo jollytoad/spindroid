@@ -160,6 +160,28 @@ object SessionApps {
         }
     }
 
+    /**
+     * Offers one installed app under its real package name, so the
+     * icon on its row opens the app the way the launcher would, and
+     * a tap that must not open it says so on a real package.
+     */
+    fun offerInstalledApp(label: String, packageName: String, uid: Int) {
+        finder = MediaAppFinder {
+            listOf(
+                SessionApp(
+                    packageName = packageName,
+                    label = label,
+                    uid = uid,
+                    playingNow = false,
+                    nowPlaying = null,
+                    canPlay = false,
+                    canPause = false,
+                    holdsSession = false,
+                ),
+            )
+        }
+    }
+
     /** Runs the finder, and offers what it finds to the card. */
     fun runFinder() {
         val found = finder?.installedMediaApps() ?: return

@@ -49,6 +49,22 @@ Feature: The two-card sender screen
     And Play is pressed on the Tidal row
     Then Tidal plays again
 
+  Scenario: A playing row offers Pause alone
+    Given Tidal holds a playing session
+    Then the Tidal row offers Pause
+    And the Tidal row offers no Play
+
+  Scenario: A paused row offers Play alone
+    Given Tidal holds a paused session
+    Then the Tidal row offers Play
+    And the Tidal row offers no Pause
+
+  Scenario: A session that answers no transport carries no button
+    Given Quiet holds a session that answers no transport
+    Then the Source card lists Quiet
+    And the Quiet row offers no Play
+    And the Quiet row offers no Pause
+
   Scenario: The layout adapts to the width
     Given Tidal holds a playing session
     And "Tidal" is picked on the Source card

@@ -47,6 +47,23 @@ Feature: Add sources to the card
     And the Source card lists Tidal
     And the finder does not offer "Radio" again
 
+  @discovery
+  Scenario: A row tap picks without opening the app
+    Given the phone holds no other playing app
+    And the finder offers Spotify from this phone
+    When the plus is chosen
+    And "Spotify" is picked on the Source card
+    Then the sender stays in the foreground
+    And "Spotify" stays picked on the Source card
+
+  @discovery
+  Scenario: The row icon opens the app
+    Given the phone holds no other playing app
+    And the finder offers Spotify from this phone
+    When the plus is chosen
+    And the Spotify icon is chosen
+    Then Spotify opens in the foreground
+
   @requires-music-assistant
   @discovery
   Scenario: Connect enables when the pick is a discovered app

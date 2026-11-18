@@ -59,6 +59,16 @@ class TwoCardSteps {
         composeRule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
+    @After
+    fun closeTheRealApp() {
+        // The real app that the scenario opened holds a session and
+        // the foreground after the steps, so it leaves the way it came.
+        val packageName = realPackage ?: return
+        realPackage = null
+        if (packageName == context.packageName) return
+        forceStop(packageName)
+    }
+
     @Before
     fun startClean() {
         // The discards persist for the user, one scenario at a time, so
@@ -83,6 +93,12 @@ class TwoCardSteps {
     fun tidalHoldsAPausedSession() {
         TestSession.start(title("Tidal"), playing = false)
         waitForRow("Tidal")
+    }
+
+    @Given("{word} holds a session that answers no transport")
+    fun appHoldsASessionThatAnswersNoTransport(app: String) {
+        TestSession.startUnresponsive(title(app))
+        waitForRow(app)
     }
 
     @Given("the app is signed into Music Assistant")
@@ -150,6 +166,26 @@ class TwoCardSteps {
         composeRule.waitForIdle()
     }
 
+    @Then("the {word} row offers {word}")
+    fun theRowOffers(app: String, button: String) {
+        // The row offers the verb its state needs, so the other verb
+        // has no place in it.
+        composeRule.waitForIdle()
+        composeRule.onNode(
+            hasContentDescription(button) and hasAnyAncestor(row(app)),
+        ).assertIsDisplayed()
+    }
+
+    @Then("the {word} row offers no {word}")
+    fun theRowOffersNo(app: String, button: String) {
+        composeRule.waitForIdle()
+        composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(
+                hasContentDescription(button) and hasAnyAncestor(row(app)),
+            ).fetchSemanticsNodes().isEmpty()
+        }
+    }
+
     @Then("the Connect control is disabled")
     fun theConnectControlIsDisabled() {
         control().assertIsNotEnabled()
@@ -196,6 +232,39 @@ class TwoCardSteps {
         SessionApps.offerInstalled(one)
     }
 
+    @Given("the phone holds no other playing app")
+    fun thePhoneHoldsNoOtherPlayingApp() {
+        // The pick follows the one app that plays, so a scenario that
+        // reads a pick needs a phone where nothing else plays. The
+        // apps that play are stopped, the way a reset would stop them.
+        val playing = SessionApps.apps.value.filter {
+            it.playingNow && it.packageName != context.packageName
+        }
+        playing.forEach { forceStop(it.packageName) }
+        awaitUntil(AWAIT_QUIET_MILLIS) {
+            SessionApps.apps.value.none {
+                it.playingNow && it.packageName != context.packageName
+            }
+        }
+    }
+
+    @Given("the finder offers {word} from this phone")
+    fun theFinderOffersTheRealApp(label: String) {
+        val manager = context.packageManager
+        val info = manager.getInstalledApplications(0)
+            .firstOrNull { manager.getApplicationLabel(it).toString() == label }
+            ?: error("$label is not installed on this phone.")
+        // A session left from earlier use would turn the discovered
+        // row away before the plus runs, so the app starts quiet.
+        forceStop(info.packageName)
+        realPackage = info.packageName
+        SessionApps.offerInstalledApp(
+            label = label,
+            packageName = info.packageName,
+            uid = manager.getPackageUid(info.packageName, 0),
+        )
+    }
+
     @When("the plus is chosen")
     fun thePlusIsChosen() {
         composeRule.waitForIdle()
@@ -203,6 +272,35 @@ class TwoCardSteps {
             context.getString(R.string.finder_open),
         ).performClick()
         composeRule.waitForIdle()
+    }
+
+    @When("the {word} icon is chosen")
+    fun theAppIconIsChosen(app: String) {
+        composeRule.waitForIdle()
+        // The icon is the one control that opens the app, and it says
+        // so with the app's own name.
+        composeRule.onNode(
+            hasContentDescription(context.getString(R.string.open_app, app)),
+        ).performScrollTo().performClick()
+        composeRule.waitForIdle()
+    }
+
+    @Then("the sender stays in the foreground")
+    fun theSenderStaysInTheForeground() {
+        // The open path answers a tap at once, so a moment of quiet
+        // says the pick left the sender where it was.
+        Thread.sleep(WATCH_OPEN_MILLIS)
+        val front = device().currentPackageName
+        check(front == context.packageName) {
+            "The pick moved the foreground to $front."
+        }
+    }
+
+    @Then("{word} opens in the foreground")
+    fun theAppOpensInTheForeground(app: String) {
+        val packageName = realPackage
+            ?: error("$app was not offered from this phone, so it cannot open.")
+        awaitUntil(AWAIT_OPEN_MILLIS) { device().currentPackageName == packageName }
     }
 
     @Then("the rows read {string}")
@@ -287,6 +385,21 @@ class TwoCardSteps {
 
     /** The node of one Source card row, named after the session title. */
     private fun row(name: String) = hasText(name, substring = true) and hasClickAction()
+
+    /** The phone, for the checks that read past the app's own window. */
+    private fun device() = UiDevice.getInstance(
+        InstrumentationRegistry.getInstrumentation(),
+    )
+
+    /** Stops one app on the phone, the way a reset would stop it. */
+    private fun forceStop(packageName: String) {
+        InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand("am force-stop $packageName")?.close()
+        Thread.sleep(STOP_SETTLE_MILLIS)
+    }
+
+    /** The real package of the app the last offer carried, when it did. */
+    private var realPackage: String? = null
 
     /** The title that the test session carries, as the row shows it. */
     private fun title(app: String) = "$app — the BDD session"
@@ -523,6 +636,18 @@ class TwoCardSteps {
     private companion object {
         /** How long the session has to answer the transport commands. */
         const val AWAIT_PLAY_MILLIS = 10_000L
+
+        /** How long the phone may take to fall quiet after a stop. */
+        const val AWAIT_QUIET_MILLIS = 10_000L
+
+        /** How long a stop takes to land, in milliseconds. */
+        const val STOP_SETTLE_MILLIS = 500L
+
+        /** How long the foreground is watched after a pick. */
+        const val WATCH_OPEN_MILLIS = 1_500L
+
+        /** How long an app may take to reach the foreground. */
+        const val AWAIT_OPEN_MILLIS = 15_000L
 
         /** How long the stream may take to reach the picked player. */
         const val AWAIT_STREAM_MILLIS = 30_000L
