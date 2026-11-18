@@ -34,8 +34,9 @@ already on the card.
 1. **Pick.** A tap anywhere on the row picks the app, and the capture
    carries it. While the stream runs the tap swaps the capture filter
    of the running projection, as today. The pick is shown by the
-   tinted row. On a discovered row the pick also opens the app, so one
-   tap arms the pick and starts the app that will produce the audio.
+   tinted row. The pick never opens the app, on a session row or a
+   discovered one, so the focus follower can never pull an app to the
+   front either. The icon on the row is the one control that opens.
 2. **Play and pause.** The one round button on the trailing edge acts
    on the app's session. A playing row shows pause; a paused row shows
    play. A button appears only when the app supports it, so no row
