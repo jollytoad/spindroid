@@ -108,8 +108,8 @@ class TwoCardSteps {
         waitForRow(app)
     }
 
-    @When("Spotify drops its media session")
-    fun spotifyDropsItsMediaSession() {
+    @When("Mellow drops its media session")
+    fun mellowDropsItsMediaSession() {
         TestSession.release()
     }
 

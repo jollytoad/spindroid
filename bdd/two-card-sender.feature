@@ -40,10 +40,10 @@ Feature: The two-card sender screen
 
   Scenario: The Source list follows the sessions
     Given the app is open
-    When Spotify starts a media session
-    Then the Source card lists Spotify
-    When Spotify drops its media session
-    Then the Source card no longer lists Spotify
+    When Mellow starts a media session
+    Then the Source card lists Mellow
+    When Mellow drops its media session
+    Then the Source card no longer lists Mellow
 
   Scenario: Row transport controls drive the picked app
     Given Tidal holds a playing session
@@ -90,9 +90,9 @@ Feature: The two-card sender screen
   @requires-music-assistant
   Scenario: The source changes while streaming
     Given the stream sends Tidal's audio to the first player
-    When Spotify starts a media session
-    And "Spotify" is picked on the Source card
-    Then the stream plays Spotify's audio
+    When Mellow starts a media session
+    And "Mellow" is picked on the Source card
+    Then the stream plays Mellow's audio
 
   @requires-music-assistant
   @followpick
