@@ -167,10 +167,6 @@ object SessionApps {
         refreshDisplay()
     }
 
-    /** Whether the package came from the finder, and holds no session. */
-    fun isDiscovered(packageName: String): Boolean =
-        mutableOffers.value.any { it.packageName == packageName }
-
     /** Drops one app from the offers, and keeps the drop across restarts. */
     fun discard(packageName: String) {
         mutableDiscarded.value = mutableDiscarded.value + packageName

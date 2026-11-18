@@ -123,6 +123,7 @@ internal fun SourceCard(
                                 picked = app.packageName == picked,
                                 onPick = { onPick(app.packageName) },
                                 onDiscard = { onDiscard(app.packageName) },
+                                onOpen = { onOpen(app.packageName) },
                             )
                         }
                     }
@@ -334,7 +335,7 @@ private fun drawableToBitmap(drawable: Drawable, sizePx: Int): Bitmap {
  * away, so the rows under it rise in step with the collapse. The
  * model drops the row only once the collapse has settled, and the
  * snackbar with the undo shows over the screen. Tapping the row picks
- * the app and opens it.
+ * the app; tapping the app's icon opens it.
  */
 @Composable
 private fun DiscoveredRow(
@@ -342,6 +343,7 @@ private fun DiscoveredRow(
     picked: Boolean,
     onPick: () -> Unit,
     onDiscard: () -> Unit,
+    onOpen: () -> Unit,
 ) {
     // The visible state of the row is the one truth of its leaving: the
     // swipe sets the target to false, the collapse animation runs to
@@ -396,6 +398,7 @@ private fun DiscoveredRow(
                     app = app,
                     picked = picked,
                     onPick = onPick,
+                    onOpen = onOpen,
                 )
             }
         }
@@ -404,13 +407,15 @@ private fun DiscoveredRow(
 
 /**
  * The face of one discovered app: its icon and its name, dimmed beside
- * the session rows. The face covers the band at rest.
+ * the session rows. The face covers the band at rest. Tapping the face
+ * picks the app; tapping the icon opens it.
  */
 @Composable
 private fun DiscoveredFace(
     app: SessionApps.SessionApp,
     picked: Boolean,
     onPick: () -> Unit,
+    onOpen: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -431,7 +436,7 @@ private fun DiscoveredFace(
         AppIcon(
             packageName = app.packageName,
             label = app.label,
-            onOpen = onPick,
+            onOpen = onOpen,
         )
         Text(
             text = app.label,

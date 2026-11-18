@@ -284,10 +284,10 @@ class MainActivity : ComponentActivity() {
      * @param packageName the package of the picked app
      */
     private fun pickSource(packageName: String) {
+        // The pick arms the capture, and it never opens the app: the
+        // icon on the row is the one control that opens, so no pick,
+        // and no focus move, ever pulls an app to the front.
         SessionApps.pick(packageName)
-        // A discovered app holds no session yet, so the pick arms it and
-        // opens it: the audio arrives when the user plays there.
-        if (SessionApps.isDiscovered(packageName)) openApp(packageName)
         if (!SessionStateHolder.running.value) return
         val uid = SessionApps.uidOf(packageName)
         if (uid > 0) {
