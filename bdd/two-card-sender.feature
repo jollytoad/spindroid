@@ -145,10 +145,11 @@ Feature: The two-card sender screen
 
   @discovery
   Scenario: A swipe discards a discovered app
-    Given the finder offers "Radio" as an installed media app
+    Given the finder offers "Radio" and "Tidal" as installed media apps
     When the plus is chosen
     And the Radio row is swiped aside
     Then the Source card no longer lists Radio
+    And the Source card lists Tidal
     And the finder does not offer "Radio" again
 
   @requires-music-assistant

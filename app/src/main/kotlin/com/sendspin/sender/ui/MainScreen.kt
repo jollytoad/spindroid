@@ -40,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -314,22 +315,30 @@ private fun SourceCard(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
+                // A row carries remembered state, and the list changes in
+                // the middle when a discard lands, so every row keeps
+                // its own composition key. Without the key, the row
+                // under a discarded one inherits the discarded row's
+                // collapse state, because the plain column remembers by
+                // position.
                 apps.forEach { app ->
-                    if (app.holdsSession) {
-                        SourceRow(
-                            app = app,
-                            picked = app.packageName == picked,
-                            onPick = { onPick(app.packageName) },
-                            onPlay = { onPlay(app.packageName) },
-                            onPause = { onPause(app.packageName) },
-                        )
-                    } else {
-                        DiscoveredRow(
-                            app = app,
-                            picked = app.packageName == picked,
-                            onPick = { onPick(app.packageName) },
-                            onDiscard = { onDiscard(app.packageName) },
-                        )
+                    key(app.packageName) {
+                        if (app.holdsSession) {
+                            SourceRow(
+                                app = app,
+                                picked = app.packageName == picked,
+                                onPick = { onPick(app.packageName) },
+                                onPlay = { onPlay(app.packageName) },
+                                onPause = { onPause(app.packageName) },
+                            )
+                        } else {
+                            DiscoveredRow(
+                                app = app,
+                                picked = app.packageName == picked,
+                                onPick = { onPick(app.packageName) },
+                                onDiscard = { onDiscard(app.packageName) },
+                            )
+                        }
                     }
                 }
             }
