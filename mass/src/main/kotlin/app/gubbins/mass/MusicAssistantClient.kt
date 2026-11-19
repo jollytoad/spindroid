@@ -18,7 +18,7 @@ import java.util.UUID
  * phone and in the tests.
  */
 public class MusicAssistantClient(
-    /** The base address of the server, such as `http://192.168.8.242:8095`. */
+    /** The base address of the server, such as `http://192.0.2.10:8095`. */
     private val baseUrl: String,
 ) {
     private val moshi = Moshi.Builder().build()

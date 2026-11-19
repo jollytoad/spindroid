@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * The name comes from the mDNS record, and the user sees it on the screen.
  * The address is the base address of the web interface, such as
- * `http://192.168.8.242:8095`.
+ * `http://192.0.2.10:8095`.
  */
 data class DiscoveredServer(
     val name: String,
