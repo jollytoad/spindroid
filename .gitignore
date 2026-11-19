@@ -4,6 +4,9 @@ build/
 local.properties
 gradle/gradle-daemon-jvm.properties
 
+# Kotlin
+.kotlin/
+
 # Android
 *.apk
 *.aab
