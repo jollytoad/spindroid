@@ -53,6 +53,7 @@ Feature: The two-card sender screen
     Given Tidal holds a playing session
     Then the Tidal row offers Pause
     And the Tidal row offers no Play
+    And the Tidal row carries the playing bars
 
   Scenario: A paused row offers Play alone
     Given Tidal holds a paused session
@@ -124,6 +125,14 @@ Feature: The two-card sender screen
     When "Disconnect" is pressed
     Then the stream stops
     And the destination stops playing the phone
+
+  @requires-music-assistant
+  Scenario: The live destination row carries the bars
+    Given the stream sends Tidal's audio to the first player
+    Then the first player's row carries the live output bars
+    When "Disconnect" is pressed
+    Then no destination row carries the live output bars
+    And the first player stays picked on the Destination card
 
   @requires-music-assistant
   Scenario: The picked source vanishes mid-stream

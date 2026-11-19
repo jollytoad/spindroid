@@ -12,6 +12,8 @@ import app.gubbins.mass.MassPlayer
  *   of the members of a group can be found
  * @param loading the list is being read
  * @param choosing the player that is being pointed at the phone right now
+ * @param livePlayerId the player that the server last pointed at the phone,
+ *   while the routing runs; the row of this player carries the bars
  * @param error the reason the last attempt failed
  */
 data class MassPlayerState(
@@ -19,5 +21,6 @@ data class MassPlayerState(
     val allPlayers: List<MassPlayer> = emptyList(),
     val loading: Boolean = false,
     val choosing: String? = null,
+    val livePlayerId: String? = null,
     val error: String? = null,
 )

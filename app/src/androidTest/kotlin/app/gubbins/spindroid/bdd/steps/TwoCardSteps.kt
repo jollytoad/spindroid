@@ -5,7 +5,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -605,13 +604,42 @@ class TwoCardSteps {
 
     @Then("the first player stays picked on the Destination card")
     fun theFirstPlayerStaysPicked() {
+        // The row is its own selection control, the way a source row is,
+        // so its own state says whether the pick holds it.
         val label = ServerPlayers.firstLabel()
-        val node = composeRule.onNodeWithText(label, substring = true).fetchSemanticsNode()
-        val radio = node.children.firstOrNull {
-            runCatching { it.config[SemanticsProperties.Selected] }.getOrNull() == true
-        } ?: error("The row of the first player has no radio to read.")
-        check(radio.config[SemanticsProperties.Selected]) {
+        val node = composeRule.onNode(row(label)).fetchSemanticsNode()
+        val selected = node.config.getOrElse(SemanticsProperties.Selected) { false }
+        check(selected) {
             "The first player is not picked."
+        }
+    }
+
+    @Then("the {word} row carries the playing bars")
+    fun theRowCarriesThePlayingBars(app: String) {
+        // The row merges its children, so the bars give their description
+        // to the row itself.
+        composeRule.onNode(
+            row(app) and hasContentDescription(context.getString(R.string.bars_playing)),
+        ).assertIsDisplayed()
+    }
+
+    @Then("the first player's row carries the live output bars")
+    fun theFirstPlayerCarriesTheLiveOutputBars() {
+        val label = ServerPlayers.firstLabel()
+        composeRule.waitForIdle()
+        composeRule.onNode(
+            row(label) and hasContentDescription(context.getString(R.string.bars_live_output)),
+        ).performScrollTo().assertIsDisplayed()
+    }
+
+    @Then("no destination row carries the live output bars")
+    fun noRowCarriesTheLiveOutputBars() {
+        composeRule.waitForIdle()
+        val bars = composeRule.onAllNodes(
+            hasContentDescription(context.getString(R.string.bars_live_output)),
+        ).fetchSemanticsNodes()
+        check(bars.isEmpty()) {
+            "${bars.size} rows still carry the live output bars."
         }
     }
 

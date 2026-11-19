@@ -8,6 +8,8 @@
     <string name="source_empty">No app holds a media session. Play something, then this list fills in.</string>
     <string name="action_play">Play</string>
     <string name="action_pause">Pause</string>
+    <string name="bars_playing">Playing now</string>
+    <string name="bars_live_output">Live output</string>
     <string name="source_vanished">The app that played is gone. The stream keeps sending silence until you disconnect.</string>
     <string name="source_gone">The app is gone, so the stream keeps its source. Pick again.</string>
     <string name="open_app">Open %1$s</string>
@@ -61,6 +63,7 @@
     <string name="players_none">The server has no player that can play sound.</string>
     <string name="players_not_available">Not available</string>
     <string name="players_not_live">The phone is not connected to the server, so it has no sound to send yet. Connect it first.</string>
+    <string name="players_send">send the audio of the phone to this player</string>
     <string name="action_refresh">Refresh</string>
 
     <!-- The status panel. -->

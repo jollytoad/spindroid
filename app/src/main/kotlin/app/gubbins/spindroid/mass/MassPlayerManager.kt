@@ -144,6 +144,9 @@ class MassPlayerManager(
         router?.cancel()
         val previousPlayerId = routedPlayerId
         routedPlayerId = playerId
+        // The bars name the player that the server confirms, so a fresh
+        // choice clears them until the confirmation lands.
+        publish(mutableState.value.copy(livePlayerId = null))
         if (previousPlayerId != null && previousPlayerId != playerId) {
             // The sound goes to the new player alone, so the old one is
             // stopped rather than left playing a stream it no longer owns.
@@ -191,6 +194,7 @@ class MassPlayerManager(
         router = null
         val id = routedPlayerId
         routedPlayerId = null
+        publish(mutableState.value.copy(livePlayerId = null))
         if (id != null) {
             scope.launch {
                 withContext(Dispatchers.IO) {
@@ -222,6 +226,9 @@ class MassPlayerManager(
             Log.i(TAG, "The source of $playerId went to the server with $result")
             if (result is SelectSourceResult.Success) {
                 routedPlayerId = playerId
+                // The server took the claim, so this player is the one
+                // the sound goes to now.
+                publish(mutableState.value.copy(livePlayerId = playerId))
             }
             if (result is SelectSourceResult.Failure) {
                 publish(mutableState.value.copy(choosing = null, error = result.reason))

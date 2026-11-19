@@ -188,7 +188,7 @@ private fun SourceRow(
                     fontWeight = FontWeight.Bold,
                 )
                 if (app.playingNow) {
-                    PlayingBars()
+                    PlayingBars(description = stringResource(R.string.bars_playing))
                 }
             }
             app.nowPlaying?.let { line ->
@@ -233,27 +233,6 @@ private fun PauseMark(description: String, modifier: Modifier = Modifier) {
     ) {
         Box(Modifier.size(4.dp, 16.dp).background(color, RoundedCornerShape(2.dp)))
         Box(Modifier.size(4.dp, 16.dp).background(color, RoundedCornerShape(2.dp)))
-    }
-}
-
-/**
- * The mark that says the app plays now.
- *
- * Three bars of different heights read as sound, the way every player
- * shows it. The mark carries no description, because the row already
- * names the app, and the sound speaks for itself.
- */
-@Composable
-private fun PlayingBars(modifier: Modifier = Modifier) {
-    val color = MaterialTheme.colorScheme.primary
-    Row(
-        modifier = modifier.height(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Box(Modifier.size(3.dp, 12.dp).background(color, RoundedCornerShape(2.dp)))
-        Box(Modifier.size(3.dp, 16.dp).background(color, RoundedCornerShape(2.dp)))
-        Box(Modifier.size(3.dp, 10.dp).background(color, RoundedCornerShape(2.dp)))
     }
 }
 

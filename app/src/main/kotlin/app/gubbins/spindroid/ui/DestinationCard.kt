@@ -1,34 +1,43 @@
 package app.gubbins.spindroid.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.gubbins.mass.MassPlayer
 import app.gubbins.spindroid.R
 import app.gubbins.spindroid.mass.DiscoveredServer
 import app.gubbins.spindroid.mass.MassAccountState
 import app.gubbins.spindroid.mass.MassPlayerState
+import app.gubbins.spindroid.mass.playerIconOf
 
 /**
  * The card that holds the destination.
  *
  * Before the account exists, the card holds the Music Assistant that the
  * phone found and the two ways to connect. After it, the card lists the
- * players, and the pick chooses the one player that plays the phone.
+ * players, and the row pick sends the audio of the phone to the one
+ * player it names.
  */
 @Composable
 internal fun DestinationCard(
@@ -78,6 +87,7 @@ internal fun DestinationCard(
                                 player = player,
                                 names = players.allPlayers.associate { it.playerId to it.label },
                                 picked = playerPick == player.playerId,
+                                live = player.playerId == players.livePlayerId,
                                 busy = players.choosing == player.playerId,
                                 canPick = player.available,
                                 onPick = { onPick(player.playerId) },
@@ -124,12 +134,21 @@ internal fun DestinationCard(
     }
 }
 
-/** One player in the list. */
+/**
+ * One player in the list.
+ *
+ * The row is the send control itself, the way a source row is its own
+ * pick: the tint says whether the row carries the choice, the bars mark
+ * the player that the stream plays on now, and the glyph names the kind
+ * of the player the way the server sees it. Tapping anywhere on the row
+ * sends the audio of the phone to this player.
+ */
 @Composable
 private fun PlayerRow(
     player: MassPlayer,
     names: Map<String, String>,
     picked: Boolean,
+    live: Boolean,
     busy: Boolean,
     canPick: Boolean,
     onPick: () -> Unit,
@@ -137,13 +156,47 @@ private fun PlayerRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = canPick && !busy, onClick = onPick),
+            .background(
+                if (picked) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
+                RoundedCornerShape(28.dp),
+            )
+            .clickable(
+                enabled = canPick && !busy,
+                onClickLabel = stringResource(R.string.players_send),
+                role = Role.RadioButton,
+                onClick = onPick,
+            )
+            // The row is its own selection control, the way a source row
+            // is: the clickable above gives the row its action, and this
+            // gives it the state the pick reads.
+            .semantics { selected = picked }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        RadioButton(selected = picked, onClick = onPick, enabled = canPick && !busy)
+        Icon(
+            imageVector = playerIconOf(player.icon),
+            contentDescription = null,
+            modifier = Modifier.size(GlyphSize),
+        )
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = player.label, style = MaterialTheme.typography.bodyLarge)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = player.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (live) {
+                    PlayingBars(description = stringResource(R.string.bars_live_output))
+                }
+            }
             noteOf(player, names)?.let { note ->
                 Text(text = note, style = MaterialTheme.typography.bodySmall)
             }
@@ -166,3 +219,6 @@ private fun noteOf(player: MassPlayer, names: Map<String, String>): String? {
     }
     return player.provider
 }
+
+/** The edge of the glyph that the rows show, the size of a source row icon. */
+private val GlyphSize = 40.dp
