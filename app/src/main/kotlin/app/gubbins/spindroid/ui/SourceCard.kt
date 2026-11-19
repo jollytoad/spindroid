@@ -68,6 +68,7 @@ import kotlinx.coroutines.flow.first
 internal fun SourceCard(
     apps: List<SessionApps.SessionApp>,
     picked: String?,
+    level: Float,
     onPick: (String) -> Unit,
     onPlay: (String) -> Unit,
     onPause: (String) -> Unit,
@@ -112,6 +113,7 @@ internal fun SourceCard(
                             SourceRow(
                                 app = app,
                                 picked = app.packageName == picked,
+                                level = level,
                                 onPick = { onPick(app.packageName) },
                                 onPlay = { onPlay(app.packageName) },
                                 onPause = { onPause(app.packageName) },
@@ -137,16 +139,18 @@ internal fun SourceCard(
  * One source app in the list.
  *
  * The row is the pick control itself: the tint says whether the row is
- * picked, the bars mark the app that plays now, and the one round
- * button on the trailing edge drives the app's session — pause while
- * the app plays, play while it rests, and no button when the session
- * honours neither. Tapping the app's icon opens the app; tapping
- * anywhere else on the row picks it.
+ * picked, the fill of the tint carries the loudness of the captured
+ * sound while the row is the one the stream takes, the bars mark the
+ * app that plays now, and the one round button on the trailing edge
+ * drives the app's session — pause while the app plays, play while it
+ * rests, and no button when the session honours neither. Tapping the
+ * app's icon opens the app; tapping anywhere else on the row picks it.
  */
 @Composable
 private fun SourceRow(
     app: SessionApps.SessionApp,
     picked: Boolean,
+    level: Float,
     onPick: () -> Unit,
     onPlay: () -> Unit,
     onPause: () -> Unit,
@@ -163,6 +167,9 @@ private fun SourceRow(
                 },
                 RoundedCornerShape(28.dp),
             )
+            // The fill rides the tint of the pick, and a row that is
+            // not picked carries no stream, so it stays flat.
+            .levelFill(if (picked) level else 0f)
             .selectable(
                 selected = picked,
                 role = Role.RadioButton,

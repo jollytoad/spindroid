@@ -47,6 +47,7 @@ internal fun DestinationCard(
     players: MassPlayerState,
     live: Boolean,
     running: Boolean,
+    level: Float,
     playerPick: String?,
     signedIn: Boolean,
     onSignIn: () -> Unit,
@@ -88,6 +89,7 @@ internal fun DestinationCard(
                                 names = players.allPlayers.associate { it.playerId to it.label },
                                 picked = playerPick == player.playerId,
                                 live = player.playerId == players.livePlayerId,
+                                level = level,
                                 busy = players.choosing == player.playerId,
                                 canPick = player.available,
                                 onPick = { onPick(player.playerId) },
@@ -138,10 +140,11 @@ internal fun DestinationCard(
  * One player in the list.
  *
  * The row is the send control itself, the way a source row is its own
- * pick: the tint says whether the row carries the choice, the bars mark
- * the player that the stream plays on now, and the glyph names the kind
- * of the player the way the server sees it. Tapping anywhere on the row
- * sends the audio of the phone to this player.
+ * pick: the tint says whether the row carries the choice, the fill of
+ * the tint carries the loudness of the sound that the stream sends,
+ * the bars mark the player that the stream plays on now, and the glyph
+ * names the kind of the player the way the server sees it. Tapping
+ * anywhere on the row sends the audio of the phone to this player.
  */
 @Composable
 private fun PlayerRow(
@@ -149,6 +152,7 @@ private fun PlayerRow(
     names: Map<String, String>,
     picked: Boolean,
     live: Boolean,
+    level: Float,
     busy: Boolean,
     canPick: Boolean,
     onPick: () -> Unit,
@@ -164,6 +168,9 @@ private fun PlayerRow(
                 },
                 RoundedCornerShape(28.dp),
             )
+            // The fill rides the tint of the pick, and a row that is
+            // not picked carries no stream, so it stays flat.
+            .levelFill(if (picked) level else 0f)
             .clickable(
                 enabled = canPick && !busy,
                 onClickLabel = stringResource(R.string.players_send),

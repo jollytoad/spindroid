@@ -79,6 +79,11 @@ fun MainScreen(
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
+    // The loudness of the capture, as the share of a picked row that
+    // the fill covers. Both cards show it on the row that carries the
+    // stream, so the highlight moves with the sound.
+    val fillLevel = fillLevelOf(captureStatus.peak)
+
     // The place of the pairing section that the onboarding option points
     // at. The scroll offset is in the same space as the position in the
     // column, so the button reaches the section without knowing its height.
@@ -126,6 +131,7 @@ fun MainScreen(
                     SourceCard(
                         apps = sessionApps,
                         picked = pickedSession,
+                        level = fillLevel,
                         onPick = onPickSession,
                         onPlay = onSessionPlay,
                         onPause = onSessionPause,
@@ -141,6 +147,7 @@ fun MainScreen(
                         players = players,
                         live = state.paired,
                         running = running,
+                        level = fillLevel,
                         playerPick = playerPick,
                         signedIn = account.signedIn,
                         onSignIn = onOpenSignIn,
@@ -154,6 +161,7 @@ fun MainScreen(
                     SourceCard(
                         apps = sessionApps,
                         picked = pickedSession,
+                        level = fillLevel,
                         onPick = onPickSession,
                         onPlay = onSessionPlay,
                         onPause = onSessionPause,
@@ -168,6 +176,7 @@ fun MainScreen(
                         players = players,
                         live = state.paired,
                         running = running,
+                        level = fillLevel,
                         playerPick = playerPick,
                         signedIn = account.signedIn,
                         onSignIn = onOpenSignIn,
