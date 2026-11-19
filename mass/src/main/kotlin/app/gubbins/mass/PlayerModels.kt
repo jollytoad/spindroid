@@ -14,6 +14,8 @@ import com.squareup.moshi.JsonClass
  * @param displayName the name that the server shows for the player
  * @param type the kind of the player
  * @param provider the provider that runs the player
+ * @param icon the name of the Material Design icon that the server shows
+ *   for the player, such as `speaker` or `cast`
  * @param available the player can be reached right now
  * @param enabled the player is turned on for the user
  * @param state what the player is doing, such as `idle` or `playing`
@@ -33,6 +35,7 @@ public data class MassPlayer(
     @Json(name = "display_name") val displayName: String? = null,
     val type: String = TYPE_PLAYER,
     val provider: String? = null,
+    val icon: String? = null,
     val available: Boolean = true,
     val enabled: Boolean = true,
     val state: String? = null,
