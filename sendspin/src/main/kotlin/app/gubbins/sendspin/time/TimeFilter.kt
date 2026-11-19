@@ -1,3 +1,12 @@
+/*
+ * A port of the C++ reference implementation in the Sendspin/time-filter
+ * repository, https://github.com/Sendspin/time-filter. The original is
+ * licensed under the Apache License, Version 2.0, and carries this
+ * copyright line: "Copyright [yyyy] [name of copyright owner]". This file
+ * is a derivative work: the filter was ported to Kotlin and adapted for
+ * this project. See NOTICE.md.
+ */
+
 package app.gubbins.sendspin.time
 
 import kotlin.math.abs
