@@ -1,5 +1,9 @@
 # SpinDroid
 
+<p align="center">
+  <img src="art/logo.svg" alt="The SpinDroid logo" width="160">
+</p>
+
 A SendSpin sender for Android.
 
 > [!IMPORTANT]

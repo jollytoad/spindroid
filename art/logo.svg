@@ -1,0 +1,65 @@
+<!--
+    SendSpin Sender logo.
+
+    The mark is a circle split into three pieces that share one centre:
+
+      * The robot head: a half-disc whose flat chin is the diameter cut
+        at -44.3 degrees, the same tilt as the app icon (whose chin chord
+        ran from (44.8, 53.9) to (87.05, 12.7) in the 115 x 94 logo
+        space). The eyes are holes, and the antennae keep the icon's
+        angles, scaled to the larger head.
+      * Two thick arcs sweeping the lower half, in the band weights of
+        the SendSpin logo: band edges at radii 33.8, 26.2, 18.6 and
+        11.0, so every band and every gap is 7.6 wide.
+
+    The arcs stop short of the chin line with rounded tips, so the
+    negative space runs as one open channel: chin gap, between the
+    bands, through the centre, and out the other side. Together the
+    three pieces read as a split circle.
+
+    Colours match the launcher: mark #E25C4C on the background colour,
+    here left transparent so the mark works on any surface. The eye
+    holes show whatever sits behind the mark.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="SendSpin Sender">
+  <g transform="translate(66 67)" fill="#E25C4C">
+
+    <!--
+        The robot head: half-disc of radius 33.8 on the upper side of
+        the chin diameter, with two eye holes (fill-rule evenodd).
+        Chin endpoints (24.20, -23.60) and (-24.20, 23.60).
+    -->
+    <path
+        fill-rule="evenodd"
+        d="M24.20,-23.60
+           A33.8,33.8 0 0 0 -24.20,23.60
+           Z
+           M1.58,-14.97
+           A4.22,4.22 0 1 0 -6.86,-14.97
+           A4.22,4.22 0 1 0 1.58,-14.97
+           Z
+           M-10.68,-3.01
+           A4.22,4.22 0 1 0 -19.13,-3.01
+           A4.22,4.22 0 1 0 -10.68,-3.01
+           Z"/>
+
+    <!-- The antennae, radial to the head at 30 degrees either side of its axis. -->
+    <path
+        fill="none"
+        stroke="#E25C4C"
+        stroke-width="5.5"
+        stroke-linecap="round"
+        d="M-8.30,-32.76 L-11.65,-45.97 M-32.55,-9.12 L-45.66,-12.80"/>
+
+    <!--
+        The two lower arcs of the split circle, drawn as centreline
+        strokes of width 7.6 with round tips: radii 30.0 and 14.8.
+        Their tips sit on the same two rays, 14.7 degrees off the chin
+        line, which leaves a 7.6 gap to the head at every tip.
+    -->
+    <g fill="none" stroke="#E25C4C" stroke-width="7.6" stroke-linecap="round">
+        <path d="M27.75,-11.41 A30,30 0 0 1 -12.10,27.45"/>
+        <path d="M14.30,-3.80 A14.8,14.8 0 0 1 -4.16,14.20"/>
+    </g>
+  </g>
+</svg>
