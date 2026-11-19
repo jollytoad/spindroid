@@ -70,7 +70,7 @@ class TwoCardSteps {
 
     @Before
     fun startClean() {
-        // The discards persist for the user, one scenario at a time, so
+        // The drops live in the process, one scenario at a time, so
         // a swipe that the previous scenario made never hides a row here.
         TestSession.release()
         SessionApps.resetDiscards()
@@ -325,16 +325,16 @@ class TwoCardSteps {
         composeRule.waitForIdle()
     }
 
-    @Then("the finder does not offer {string} again")
-    fun theFinderDoesNotOfferAgain(app: String) {
-        // The probe runs again through the plus, and the discard list
-        // keeps the app away.
+    @Then("the finder offers {string} again")
+    fun theFinderOffersAgain(app: String) {
+        // The probe runs again through the plus, and every run forgets
+        // the drops, so the row the swipe hid comes back.
         composeRule.onNodeWithContentDescription(
             context.getString(R.string.finder_open),
         ).performClick()
         composeRule.waitForIdle()
         composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
-            composeRule.onAllNodes(row(app)).fetchSemanticsNodes().isEmpty()
+            composeRule.onAllNodes(row(app)).fetchSemanticsNodes().isNotEmpty()
         }
     }
 

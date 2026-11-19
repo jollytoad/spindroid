@@ -87,8 +87,10 @@ app is a bigger side effect than the tap seems to promise.
 2. **Sessions win over discards.** If the user discards an app and it
    later starts a session, its real row appears. The discard governs
    the `+` results only, never the live card.
-3. **Discards persist.** The discarded package names live with the
-   other settings, so a `+` probe stays tidy across restarts.
+3. **The plus forgets the drops.** A swipe hides a row only until the
+   next `+` run: every run offers every installed media app again, so
+   the plus is also the review of the buried. The drop lives in
+   memory alone, because nothing outlives the next run.
 4. **Undo.** The snackbar after a swipe restores the app on tap.
 
 ## What does not change
@@ -119,9 +121,9 @@ app is a bigger side effect than the tap seems to promise.
    the `+` results right away instead of the help line, one tap
    earlier. Left open, because it changes the empty-state behaviour
    the screen already ships.
-3. **A picker for the buried.** The undo covers the fresh swipe; a
-   way to review discarded apps from settings is a later refinement,
-   and nothing needs it yet.
+3. **A picker for the buried.** Resolved: the `+` itself is the
+   review. Every run forgets the drops and offers every installed
+   media app again, so no settings picker is needed.
 
 ## The test impact
 
@@ -129,7 +131,7 @@ The pick assertions in `TwoCardSteps` read the radio today
 (`appIsPicked`, `appStaysPicked`). They retarget to the row's selected
 state. The probe gets a seam, so the scenarios can inject a known
 installed-app list instead of reading the real device. Discard is
-drivable with the Compose swipe action, and the persistence carries a
+drivable with the Compose swipe action, and the forget rule carries a
 unit test. All 15 scenarios keep their wording.
 
 ## Related plans

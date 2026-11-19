@@ -4,9 +4,10 @@ Feature: Add sources to the card
   The Source card lists the apps that hold a media session. The plus
   beside its title finds the installed media apps that hold none, and
   merges them into the list as dimmed rows, in the alphabetical
-  order. A swipe discards one, and the app icon on a row is the one
-  control that opens the app: a tap anywhere else on the row picks
-  it, and no pick ever pulls an app to the front.
+  order. Every run of the plus forgets the rows a swipe dropped, and
+  the app icon on a row is the one control that opens the app: a tap
+  anywhere else on the row picks it, and no pick ever pulls an app
+  to the front.
 
   @discovery
   Scenario: The plus finds the installed media apps
@@ -45,7 +46,7 @@ Feature: Add sources to the card
     And the Radio row is swiped aside
     Then the Source card no longer lists Radio
     And the Source card lists Tidal
-    And the finder does not offer "Radio" again
+    And the finder offers "Radio" again
 
   @discovery
   Scenario: A row tap picks without opening the app

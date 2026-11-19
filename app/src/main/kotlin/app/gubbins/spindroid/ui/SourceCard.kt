@@ -316,7 +316,7 @@ private fun drawableToBitmap(drawable: Drawable, sizePx: Int): Bitmap {
  * One app that the finder found, and that holds no session yet.
  *
  * The row is dimmed and carries no transport buttons. A swipe to the
- * left discards it, the way an email app archives a message: the
+ * left drops it from the list until the next run of the plus: the
  * native swipe box drives the gesture, and the row shrinks and fades
  * away, so the rows under it rise in step with the collapse. The
  * model drops the row only once the collapse has settled, and the

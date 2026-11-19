@@ -56,7 +56,7 @@ object SessionApps {
     // The sessions the app holds right now, before the finder offers join.
     private val mutableSessions = MutableStateFlow<List<SessionApp>>(emptyList())
 
-    // The offers the finder found, and the packages the user discarded.
+    // The offers the finder found, and the packages a swipe hid from it.
     private val mutableOffers = MutableStateFlow<List<SessionApp>>(emptyList())
     private val mutableDiscarded = MutableStateFlow<Set<String>>(emptySet())
 
@@ -182,44 +182,37 @@ object SessionApps {
         }
     }
 
-    /** Runs the finder, and offers what it finds to the card. */
+    /**
+     * Runs the finder, and offers what it finds to the card.
+     *
+     * The plus is the one view of every installed media app, so each
+     * run forgets the drops: the apps a swipe hid come back, and the
+     * card holds the whole answer of the phone again. A swipe hides a
+     * row only until the next run of the plus.
+     */
     fun runFinder() {
         val found = finder?.installedMediaApps() ?: return
         mutableOffers.value = found
+        mutableDiscarded.value = emptySet()
         refreshDisplay()
     }
 
-    /** Drops one app from the offers, and keeps the drop across restarts. */
+    /** Hides one app from the offers, until the plus runs again. */
     fun discard(packageName: String) {
         mutableDiscarded.value = mutableDiscarded.value + packageName
-        storeDiscarded()
         refreshDisplay()
     }
 
-    /** Takes one dropped app back, when the snackbar undo runs. */
+    /** Takes one hidden app back, when the snackbar undo runs. */
     fun undoDiscard(packageName: String) {
         mutableDiscarded.value = mutableDiscarded.value - packageName
-        storeDiscarded()
         refreshDisplay()
     }
 
-    /** Forgets every discard. The test hook uses it to start clean. */
+    /** Forgets every hidden app. The test hook uses it to start clean. */
     fun resetDiscards() {
         mutableDiscarded.value = emptySet()
-        storeDiscarded()
         refreshDisplay()
-    }
-
-    private fun storeDiscarded() {
-        val appContext = context ?: return
-        val preferences = appContext.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
-        preferences.edit().putStringSet(KEY_DISCARDED, mutableDiscarded.value).apply()
-    }
-
-    private fun loadDiscarded(): Set<String> {
-        val appContext = context ?: return emptySet()
-        val preferences = appContext.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
-        return preferences.getStringSet(KEY_DISCARDED, emptySet())?.toSet() ?: emptySet()
     }
 
     /**
@@ -233,7 +226,6 @@ object SessionApps {
         stop()
         context = appContext
         manager = appContext.getSystemService(MediaSessionManager::class.java)
-        mutableDiscarded.value = loadDiscarded()
         finder = InstalledMediaApps(appContext)
         val changed = MediaSessionManager.OnActiveSessionsChangedListener {
             read(appContext)
@@ -296,8 +288,9 @@ object SessionApps {
     /**
      * The rows the Source card carries: the sessions and the finder offers.
      *
-     * The offers join the sessions in the alphabetical order, and a
-     * discarded offer stays away. An offer whose app holds a session
+     * The offers join the sessions in the alphabetical order, and an
+     * offer a swipe hid stays away until the plus runs again, which
+     * forgets every drop. An offer whose app holds a session
      * leaves, because the session row already speaks for that app, and
      * one row per app keeps the card honest. The package is the
      * identity the merge trusts first, because a service label can
@@ -474,8 +467,6 @@ object SessionApps {
 
     private const val TAG = "SpinDroid"
     private const val RETRY_MILLIS = 2_000L
-    private const val FILE_NAME = "spindroid_source_apps"
-    private const val KEY_DISCARDED = "discarded"
 
     /** The first uid the test finder hands out: none of a real app. */
     private const val OFFER_UID_BASE = 90_000
