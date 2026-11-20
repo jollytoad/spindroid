@@ -18,11 +18,18 @@ import kotlinx.coroutines.flow.asStateFlow
  * The stub that receives the media sessions.
  *
  * The system binds to a notification listener and hands it the media
- * sessions of the device, so the stub needs no code of its own. The user
+ * sessions of the device, so the stub needs no state of its own. The user
  * grants the access once, under the notification access settings, and the
- * grant is what keeps the session reading private.
+ * grant is what keeps the session reading private. The binding is also the
+ * first moment the reading can succeed, so the stub tells the reader to
+ * look again.
  */
-class PlayingAppsListener : NotificationListenerService()
+class PlayingAppsListener : NotificationListenerService() {
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        SessionApps.listenerConnected()
+    }
+}
 
 /**
  * The apps that hold a media session on the phone.
@@ -65,6 +72,19 @@ object SessionApps {
         get() = mutableDisplay.asStateFlow()
 
     private val mutableDisplay = MutableStateFlow<List<SessionApp>>(emptyList())
+
+    // The reading found no grant, so no app can appear. The card says so,
+    // instead of showing nothing.
+    private val mutableAccessMissing = MutableStateFlow(false)
+
+    /**
+     * Whether the notification listener access is missing.
+     *
+     * The Source card tells the user to allow it, because nobody can tell
+     * an empty card of a phone at rest from a card that the missing grant
+     * keeps empty.
+     */
+    val accessMissing: StateFlow<Boolean> = mutableAccessMissing.asStateFlow()
 
     /** Computes what the card shows from the sessions, the offers, the discards. */
     private fun refreshDisplay() {
@@ -228,6 +248,7 @@ object SessionApps {
             manager?.addOnActiveSessionsChangedListener(changed, ComponentName(appContext, PlayingAppsListener::class.java), handler)
         } catch (exception: SecurityException) {
             Log.i(TAG, "The media sessions are not readable, because the access is missing")
+            mutableAccessMissing.value = true
             scheduleRetry(appContext, changed)
             return
         }
@@ -257,6 +278,7 @@ object SessionApps {
         handler.removeCallbacksAndMessages(null)
         retryPending = false
         mutableSessions.value = emptyList()
+        mutableAccessMissing.value = false
         mutableOffers.value = emptyList()
         mutableDiscarded.value = emptySet()
         finder = null
@@ -354,6 +376,18 @@ object SessionApps {
     }
 
     /**
+     * The system bound the listener, so the grant has arrived.
+     *
+     * The binding is the earliest sign that the user allowed the access,
+     * so the reading looks again instead of waiting for the retry. The
+     * reading stands down when the screen is closed, and the next start
+     * of the screen reads anyway.
+     */
+    fun listenerConnected() {
+        reread()
+    }
+
+    /**
      * Reads the sessions of the device, and keeps one controller per app.
      *
      * The list holds every session that publishes metadata, including a
@@ -367,9 +401,11 @@ object SessionApps {
             sessionManager.getActiveSessions(ComponentName(appContext, PlayingAppsListener::class.java))
         } catch (exception: SecurityException) {
             Log.i(TAG, "The media sessions are not readable, because the access is missing")
+            mutableAccessMissing.value = true
             scheduleRetry(appContext, null)
             return
         }
+        mutableAccessMissing.value = false
         val fresh = mutableMapOf<String, MediaController>()
         val currentPackages = mutableSetOf<String>()
         val list = sessions

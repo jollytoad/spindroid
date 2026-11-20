@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +57,8 @@ internal fun SourceCard(
     apps: List<SessionApps.SessionApp>,
     picked: String?,
     level: Float,
+    missingAccess: Boolean,
+    onAllowAccess: () -> Unit,
     onPick: (String) -> Unit,
     onPlay: (String) -> Unit,
     onPause: (String) -> Unit,
@@ -83,10 +86,23 @@ internal fun SourceCard(
                 }
             }
             if (apps.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.source_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                if (missingAccess) {
+                    // The grant is what stands between the user and the
+                    // list, and only the user can give it, so the card
+                    // names the problem and offers the road to its toggle.
+                    Text(
+                        text = stringResource(R.string.source_access_missing),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(onClick = onAllowAccess) {
+                        Text(text = stringResource(R.string.source_access_allow))
+                    }
+                } else {
+                    Text(
+                        text = stringResource(R.string.source_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             } else {
                 // A row carries remembered state, and the list changes in
                 // the middle when a discard lands, so every row keeps

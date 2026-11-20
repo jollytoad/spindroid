@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.util.Log
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
@@ -139,6 +140,7 @@ class MainActivity : ComponentActivity() {
             val discoveryError by discovery.error.collectAsStateWithLifecycle()
 
             val sessionApps by SessionApps.apps.collectAsStateWithLifecycle()
+            val sessionAccessMissing by SessionApps.accessMissing.collectAsStateWithLifecycle()
             val pickedSession by SessionApps.picked.collectAsStateWithLifecycle()
 
             // The pairings that the phone keeps, read once here and again
@@ -219,9 +221,11 @@ class MainActivity : ComponentActivity() {
                     discoveredServer = foundServer,
                     discoveryError = discoveryError,
                     sessionApps = sessionApps,
+                    sessionAccessMissing = sessionAccessMissing,
                     pickedSession = pickedSession,
                     playerPick = playerPick,
                     onPickSession = { packageName -> pickSource(packageName) },
+                    onAllowSessionAccess = { openNotificationAccess() },
                     onOpenFinder = { SessionApps.runFinder() },
                     onDiscard = { packageName -> SessionApps.discard(packageName) },
                     onSessionPlay = { packageName -> SessionApps.play(packageName) },
@@ -298,6 +302,17 @@ class MainActivity : ComponentActivity() {
         packageManager.getLaunchIntentForPackage(packageName)?.let { intent ->
             startActivity(intent)
         }
+    }
+
+    /**
+     * Opens the screen that holds the notification access.
+     *
+     * The media session reading needs the access, and only the user can
+     * grant it. The screen holds the toggle, so the button takes the user
+     * straight there instead of leaving a hunt through the settings.
+     */
+    private fun openNotificationAccess() {
+        startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
     }
 
     private fun connect() {
