@@ -112,6 +112,18 @@ jobs:
         if: steps.gate.outputs.changed == 'true'
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Set up Python for the interop test
+        if: steps.gate.outputs.changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install the Python packages of the test server
+        if: steps.gate.outputs.changed == 'true'
+        # The interop test launches tools/test_server.py, which needs both
+        # packages. The runner image has neither guaranteed.
+        run: python3 -m pip install cryptography "websockets~=17.0"
+
       - name: Prepare the Android SDK and its scratch folder
         if: steps.gate.outputs.changed == 'true'
         run: |

@@ -30,8 +30,8 @@ import java.util.concurrent.TimeUnit
  * Kotlin code, so a mistake in one implementation does not hide a mistake in
  * the other. This test proves that the two speak the same language.
  *
- * The test skips itself when the machine has no Python, or no
- * `cryptography` package for it.
+ * The test skips itself when the machine has no Python, or none of the
+ * `cryptography` and `websockets` packages for it.
  */
 class InteropTest {
     /** The epoch both clocks start from, so the offset between them stays small. */
@@ -374,7 +374,7 @@ class InteropTest {
     /** Whether the machine can run the server. */
     private fun pythonWorks(script: File): Boolean {
         return try {
-            val process = ProcessBuilder("python3", "-c", "import cryptography")
+            val process = ProcessBuilder("python3", "-c", "import cryptography, websockets")
                 .redirectErrorStream(true)
                 .start()
             process.inputStream.readBytes()
