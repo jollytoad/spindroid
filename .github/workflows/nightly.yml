@@ -1,0 +1,231 @@
+# Nightly builds of the debug APK.
+#
+# One gate keeps the release list clean: the run stops unless a commit
+# touched a production input of the APK. A byte comparison of the APK would
+# be pointless, because every build embeds a new versionCode, so the bytes
+# always differ.
+#
+# Each release is a dated prerelease that records the commit it was built
+# from, so the next run can find it. GitHub runs schedules on the default
+# branch only, and may delay them by some minutes.
+name: Nightly
+
+on:
+  schedule:
+    - cron: "21 3 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build even when no commit landed since the last nightly.
+        default: false
+        type: boolean
+
+concurrency:
+  group: nightly
+  # A delayed run must not cancel one that already started.
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  APK: app/build/outputs/apk/debug/app-debug.apk
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the whole history
+        uses: actions/checkout@v4
+        with:
+          # The release notes list the commits between two nightlies.
+          fetch-depth: 0
+
+      - name: Find the previous nightly release
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          releases=$(gh api "repos/${{ github.repository }}/releases?per_page=100")
+          latest=$(jq -r \
+            '[.[] | select(.draft | not) | select(.tag_name | startswith("nightly-"))] | sort_by(.created_at) | last // empty' \
+            <<< "$releases")
+          if [ -n "$latest" ]; then
+            sha=$(jq -r '.target_commitish' <<< "$latest")
+          else
+            sha=""
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Decide whether the APK can change
+        id: gate
+        run: |
+          set -euo pipefail
+          previous="${{ steps.previous.outputs.sha }}"
+          head="${{ github.sha }}"
+          if [ "${{ inputs.force }}" = "true" ]; then
+            changed=true
+            reason="the run was forced"
+          elif [ -z "$previous" ]; then
+            changed=true
+            reason="no previous nightly release exists"
+          elif ! git cat-file -e "$previous^{commit}" 2> /dev/null; then
+            # The history was rewritten, so the previous SHA is gone. That
+            # counts as a change, so a broken state never skips the build.
+            changed=true
+            reason="the previous nightly SHA is no longer in the history"
+          else
+            files=$(git diff --name-only "$previous" "$head")
+            # The production inputs of the APK, then the test trees taken
+            # back out. Everything else is prose, plans, or tooling.
+            relevant=$(grep -E \
+              -e '^app/' -e '^sendspin/' -e '^mass/' -e '^gradle/' \
+              -e '^gradlew(\.bat)?$' -e '^build\.gradle\.kts$' \
+              -e '^settings\.gradle\.kts$' -e '^gradle\.properties$' \
+              <<< "$files" \
+              | grep -v -E '^(app|sendspin|mass)/src/(test|androidTest)/' \
+              || true)
+            if [ -n "$relevant" ]; then
+              changed=true
+              reason="a production file changed"
+            else
+              changed=false
+              reason="no production file changed"
+            fi
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          if [ "$changed" = "true" ]; then
+            echo "The gate opened: $reason."
+          else
+            echo "The gate closed: no production file changed since $previous."
+          fi
+
+      - name: Set up JDK 21
+        if: steps.gate.outputs.changed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        if: steps.gate.outputs.changed == 'true'
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare the Android SDK and its scratch folder
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          # AGP reads the SDK location from local.properties. The runner image
+          # sets ANDROID_HOME, and the file is not in version control.
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
+          # The runner image carries recent SDK pieces. Install the two this
+          # build needs when the image lags behind.
+          sdkmanager_bin="$(command -v sdkmanager \
+            || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
+          missing=()
+          [ -d "$ANDROID_HOME/platforms/android-36" ] || missing+=("platforms;android-36")
+          [ -d "$ANDROID_HOME/build-tools/36.0.0" ] || missing+=("build-tools;36.0.0")
+          if [ ${#missing[@]} -gt 0 ]; then
+            yes | "$sdkmanager_bin" --licenses > /dev/null || true
+            "$sdkmanager_bin" --install "${missing[@]}" > /dev/null
+          fi
+          # The Android tools must not write their preferences to the home
+          # folder. The local build does the same, see AGENTS.md.
+          mkdir -p "$PWD/.android-home/.android"
+          echo "ANDROID_PREFS_ROOT=$PWD/.android-home" >> "$GITHUB_ENV"
+
+      - name: Run the JVM tests
+        if: steps.gate.outputs.changed == 'true'
+        run: ./gradlew :sendspin:test :mass:test :app:test
+
+      - name: Build the APK
+        id: build
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          # Calendar versioning, YYYY.0M.0D, see https://calver.org.
+          # The value is recorded here, so the release notes name the exact
+          # version the APK carries.
+          calver=$(date -u +%Y.%m.%d)
+          echo "versionName=$calver" >> "$GITHUB_OUTPUT"
+          ./gradlew :app:assembleDebug \
+            -Pnightly.versionCode="$GITHUB_RUN_NUMBER" \
+            -Pnightly.versionName="$calver"
+
+      - name: Hash the APK
+        id: hash
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          sha=$(sha256sum "$APK" | cut -d' ' -f1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "APK SHA-256: $sha"
+
+      - name: Keep the APK as a run artifact
+        if: steps.gate.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: spindroid-nightly-${{ github.run_number }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      - name: Publish the nightly release
+        if: steps.gate.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          date=$(date -u +%F)
+          tag="nightly-$date"
+          asset_name="spindroid-nightly-$date-${{ github.run_number }}.apk"
+          cp "$APK" "$asset_name"
+
+          # A forced rerun on the same day replaces the release of that day.
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release delete "$tag" --yes --cleanup-tag
+          fi
+
+          previous="${{ steps.previous.outputs.sha }}"
+          if [ -n "$previous" ]; then
+            range="$previous..${{ github.sha }}"
+            # The range can be empty when the history was rewritten. That is
+            # no reason to stop the release.
+            commits=$(git log --oneline "$range" | head -n 50 || true)
+            headline="Commits since the previous nightly (\`$range\`):"
+          else
+            range=""
+            commits=$(git log --oneline -n 1)
+            headline="The first nightly build. Commit:"
+          fi
+          {
+            echo "Debug APK built from \`${{ github.sha }}\`."
+            echo
+            echo "$headline"
+            echo
+            echo '```'
+            echo "$commits"
+            echo '```'
+            echo
+            echo "APK SHA-256: \`${{ steps.hash.outputs.sha }}\`"
+            echo
+            echo "versionCode: ${{ github.run_number }}"
+            echo "versionName: ${{ steps.build.outputs.versionName }}"
+          } > release-notes.md
+
+          gh release create "$tag" "$asset_name" \
+            --prerelease \
+            --target "${{ github.sha }}" \
+            --title "Nightly $date" \
+            --notes-file release-notes.md
+
+      - name: Summarise the run
+        if: always()
+        run: |
+          if [ "${{ job.status }}" != "success" ]; then
+            echo "The run failed. Read the steps above."
+          elif [ "${{ steps.gate.outputs.changed }}" != "true" ]; then
+            echo "No production file changed since the last nightly release. Nothing was built."
+          else
+            echo "A new nightly release was published."
+          fi
