@@ -3,6 +3,7 @@ package app.gubbins.spindroid
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -26,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gubbins.sendspin.crypto.X25519
 import app.gubbins.sendspin.pairing.PairingToken
 import app.gubbins.spindroid.capture.CaptureStatusHolder
+import app.gubbins.spindroid.capture.PlayingAppsListener
 import app.gubbins.spindroid.capture.SessionApps
 import app.gubbins.spindroid.mass.AutomaticPairing
 import app.gubbins.spindroid.mass.MassAccountManager
@@ -326,14 +328,27 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Opens the screen that holds the notification access.
+     * Opens the screen that holds the notification access of the app.
      *
-     * The media session reading needs the access, and only the user can
-     * grant it. The screen holds the toggle, so the button takes the user
-     * straight there instead of leaving a hunt through the settings.
+     * The detail screen carries the toggle of this app alone, so the user
+     * lands one tap before the switch instead of in the list of every
+     * listener. Some devices know no detail action, so they fall back to
+     * the list screen.
      */
     private fun openNotificationAccess() {
-        startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        val detail = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+            .putExtra(
+                Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                // The screen reads the extra as a string and unflattens it.
+                // A component object would leave it empty, and the screen
+                // would then crash on the missing name.
+                ComponentName(this, PlayingAppsListener::class.java).flattenToString(),
+            )
+        if (detail.resolveActivity(packageManager) != null) {
+            startActivity(detail)
+        } else {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
     }
 
     /**
