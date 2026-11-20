@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,6 +60,8 @@ internal fun SourceCard(
     level: Float,
     missingAccess: Boolean,
     onAllowAccess: () -> Unit,
+    restrictedAccessPossible: Boolean,
+    onOpenAppInfo: () -> Unit,
     onPick: (String) -> Unit,
     onPlay: (String) -> Unit,
     onPause: (String) -> Unit,
@@ -96,6 +99,20 @@ internal fun SourceCard(
                     )
                     Button(onClick = onAllowAccess) {
                         Text(text = stringResource(R.string.source_access_allow))
+                    }
+                    if (restrictedAccessPossible) {
+                        // A sideloaded app meets the restricted settings
+                        // dialog at the toggle, and the way out is the ⋮
+                        // menu of the app info page. The card takes the
+                        // user to that page, because the app cannot open
+                        // the menu itself.
+                        Text(
+                            text = stringResource(R.string.source_access_restricted),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        OutlinedButton(onClick = onOpenAppInfo) {
+                            Text(text = stringResource(R.string.source_access_app_info))
+                        }
                     }
                 } else {
                     Text(

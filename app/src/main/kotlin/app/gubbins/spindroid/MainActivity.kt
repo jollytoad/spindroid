@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.util.Log
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -67,6 +68,24 @@ class MainActivity : ComponentActivity() {
 
     /** The message the app shows under the fields. */
     private var message by mutableStateOf<String?>(null)
+
+    /**
+     * Whether the phone may answer the notification access toggle with
+     * the restricted settings dialog.
+     *
+     * The dialog meets the apps that the phone installed from a file or
+     * from adb, and a store install never sees it. The Source card shows
+     * the way around the dialog only when the install is one of them, so
+     * a store user reads no text about a screen that will never come.
+     */
+    private val accessMayBeRestricted: Boolean by lazy {
+        try {
+            val installing = packageManager.getInstallSourceInfo(packageName).installingPackageName
+            installing != "com.android.vending"
+        } catch (exception: PackageManager.NameNotFoundException) {
+            true
+        }
+    }
 
     /**
      * The consent of the media projection.
@@ -226,6 +245,8 @@ class MainActivity : ComponentActivity() {
                     playerPick = playerPick,
                     onPickSession = { packageName -> pickSource(packageName) },
                     onAllowSessionAccess = { openNotificationAccess() },
+                    sessionAccessMayBeRestricted = accessMayBeRestricted,
+                    onOpenSessionAppInfo = { openAppInfo() },
                     onOpenFinder = { SessionApps.runFinder() },
                     onDiscard = { packageName -> SessionApps.discard(packageName) },
                     onSessionPlay = { packageName -> SessionApps.play(packageName) },
@@ -313,6 +334,23 @@ class MainActivity : ComponentActivity() {
      */
     private fun openNotificationAccess() {
         startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    }
+
+    /**
+     * Opens the app details page of the app.
+     *
+     * The page holds the ⋮ menu with the Allow restricted settings choice,
+     * and the phone asks for that choice before a sideloaded app may hold
+     * the notification access. The app cannot open the menu itself, so it
+     * takes the user to the page that has it.
+     */
+    private fun openAppInfo() {
+        startActivity(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", packageName, null),
+            ),
+        )
     }
 
     private fun connect() {
