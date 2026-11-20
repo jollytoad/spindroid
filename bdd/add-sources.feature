@@ -4,10 +4,10 @@ Feature: Add sources to the card
   The Source card lists the apps that hold a media session. The plus
   beside its title finds the installed media apps that hold none, and
   merges them into the list as dimmed rows, in the alphabetical
-  order. Every run of the plus forgets the rows a swipe dropped, and
-  the app icon on a row is the one control that opens the app: a tap
-  anywhere else on the row picks it, and no pick ever pulls an app
-  to the front.
+  order. Every run of the plus forgets the rows a swipe dropped. A
+  tap on a discovered row opens the app and picks it, so the pick
+  waits for the app to play, and no pick ever pulls an app to the
+  front on its own.
 
   @discovery
   Scenario: The plus finds the installed media apps
@@ -49,13 +49,12 @@ Feature: Add sources to the card
     And the finder offers "Radio" again
 
   @discovery
-  Scenario: A row tap picks without opening the app
+  Scenario: A row tap opens the app
     Given the phone holds no other playing app
     And the finder offers Spotify from this phone
     When the plus is chosen
     And "Spotify" is picked on the Source card
-    Then the sender stays in the foreground
-    And "Spotify" stays picked on the Source card
+    Then Spotify opens in the foreground
 
   @discovery
   Scenario: The row icon opens the app

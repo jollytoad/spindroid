@@ -307,9 +307,10 @@ class MainActivity : ComponentActivity() {
      * @param packageName the package of the picked app
      */
     private fun pickSource(packageName: String) {
-        // The pick arms the capture, and it never opens the app: the
-        // icon on the row is the one control that opens, so no pick,
-        // and no focus move, ever pulls an app to the front.
+        // The pick arms the capture, and it never opens the app: only
+        // a tap on a row opens one — the icon of a session row, or the
+        // whole face of a discovered row — so no pick, and no focus
+        // move, ever pulls an app to the front on its own.
         SessionApps.pick(packageName)
         if (!SessionStateHolder.running.value) return
         val uid = SessionApps.uidOf(packageName)

@@ -343,8 +343,9 @@ private fun drawableToBitmap(drawable: Drawable, sizePx: Int): Bitmap {
  * left drops it from the list until the next run of the plus: the
  * shared swipe box drives the gesture, and the row shrinks and fades
  * away, so the rows under it rise in step with the collapse. The
- * model drops the row only once the collapse has settled. Tapping
- * the row picks the app; tapping the app's icon opens it.
+ * model drops the row only once the collapse has settled. A tap on
+ * the row opens the app and picks it, so the pick waits for the app
+ * to play.
  */
 @Composable
 private fun DiscoveredRow(
@@ -366,8 +367,9 @@ private fun DiscoveredRow(
 
 /**
  * The face of one discovered app: its icon and its name, dimmed beside
- * the session rows. The face covers the band at rest. Tapping the face
- * picks the app; tapping the icon opens it.
+ * the session rows. The face covers the band at rest. A tap on the
+ * face, or on the icon inside it, opens the app and picks it: the app
+ * comes to the front, and the capture follows it once it plays.
  */
 @Composable
 private fun DiscoveredFace(
@@ -376,6 +378,13 @@ private fun DiscoveredFace(
     onPick: () -> Unit,
     onOpen: () -> Unit,
 ) {
+    // One tap takes both roads at once: the pick arms the capture for
+    // the moment the app plays, and the open brings the app to the
+    // front so the user can start it playing.
+    val openAndPick = {
+        onPick()
+        onOpen()
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -386,7 +395,7 @@ private fun DiscoveredFace(
             .selectable(
                 selected = picked,
                 role = Role.RadioButton,
-                onClick = onPick,
+                onClick = openAndPick,
             )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -395,7 +404,7 @@ private fun DiscoveredFace(
         AppIcon(
             packageName = app.packageName,
             label = app.label,
-            onOpen = onOpen,
+            onOpen = openAndPick,
         )
         Text(
             text = app.label,
