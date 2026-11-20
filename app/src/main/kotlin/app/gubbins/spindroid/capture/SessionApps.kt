@@ -144,9 +144,9 @@ object SessionApps {
     private var retryPending = false
 
     /**
-     * The finder: the question the plus asks, and its answer.
+     * The finder: the question the finder button asks, and its answer.
      *
-     * The plus is a choice of the screen, so the app probes the installed
+     * The finder is a choice of the screen, so the app probes the installed
      * apps only when the user asks. A test stands in for the probe, so a
      * BDD scenario names a known list of apps instead of reading the
      * device it runs on.
@@ -161,7 +161,7 @@ object SessionApps {
      * Offers the apps the user asked the finder for.
      *
      * The step says the apps are installed, so the probe is replaced with
-     * the answer it should give. The plus tap then reads this answer.
+     * the answer it should give. The finder tap then reads this answer.
      */
     fun offerInstalled(vararg labels: String) {
         finder = MediaAppFinder {
@@ -205,10 +205,10 @@ object SessionApps {
     /**
      * Runs the finder, and offers what it finds to the card.
      *
-     * The plus is the one view of every installed media app, so each
+     * The finder is the one view of every installed media app, so each
      * run forgets the drops: the apps a swipe hid come back, and the
      * card holds the whole answer of the phone again. A swipe hides a
-     * row only until the next run of the plus.
+     * row only until the next run of the finder.
      */
     fun runFinder() {
         val found = finder?.installedMediaApps() ?: return
@@ -217,7 +217,7 @@ object SessionApps {
         refreshDisplay()
     }
 
-    /** Hides one app from the offers, until the plus runs again. */
+    /** Hides one app from the offers, until the finder runs again. */
     fun discard(packageName: String) {
         mutableDiscarded.value = mutableDiscarded.value + packageName
         refreshDisplay()
@@ -305,7 +305,7 @@ object SessionApps {
      * The rows the Source card carries: the sessions and the finder offers.
      *
      * The offers join the sessions in the alphabetical order, and an
-     * offer a swipe hid stays away until the plus runs again, which
+     * offer a swipe hid stays away until the finder runs again, which
      * forgets every drop. An offer whose app holds a session
      * leaves, because the session row already speaks for that app, and
      * one row per app keeps the card honest. The package is the

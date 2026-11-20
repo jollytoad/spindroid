@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -36,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -82,8 +82,10 @@ internal fun SourceCard(
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onOpenFinder) {
+                    // The Video Search glyph: the magnifier says the
+                    // hunt, the play mark inside it says the media.
                     Icon(
-                        imageVector = Icons.Rounded.Add,
+                        painter = painterResource(R.drawable.ic_video_search),
                         contentDescription = stringResource(R.string.finder_open),
                     )
                 }
@@ -340,7 +342,7 @@ private fun drawableToBitmap(drawable: Drawable, sizePx: Int): Bitmap {
  * One app that the finder found, and that holds no session yet.
  *
  * The row is dimmed and carries no transport buttons. A swipe to the
- * left drops it from the list until the next run of the plus: the
+ * left drops it from the list until the next run of the finder: the
  * shared swipe box drives the gesture, and the row shrinks and fades
  * away, so the rows under it rise in step with the collapse. The
  * model drops the row only once the collapse has settled. A tap on

@@ -254,7 +254,7 @@ class TwoCardSteps {
             .firstOrNull { manager.getApplicationLabel(it).toString() == label }
             ?: error("$label is not installed on this phone.")
         // A session left from earlier use would turn the discovered
-        // row away before the plus runs, so the app starts quiet.
+        // row away before the finder runs, so the app starts quiet.
         forceStop(info.packageName)
         realPackage = info.packageName
         SessionApps.offerInstalledApp(
@@ -264,8 +264,8 @@ class TwoCardSteps {
         )
     }
 
-    @When("the plus is chosen")
-    fun thePlusIsChosen() {
+    @When("the finder is chosen")
+    fun theFinderIsChosen() {
         composeRule.waitForIdle()
         composeRule.onNodeWithContentDescription(
             context.getString(R.string.finder_open),
@@ -379,7 +379,7 @@ class TwoCardSteps {
 
     @Then("the finder offers {string} again")
     fun theFinderOffersAgain(app: String) {
-        // The probe runs again through the plus, and every run forgets
+        // The probe runs again through the finder, and every run forgets
         // the drops, so the row the swipe hid comes back.
         composeRule.onNodeWithContentDescription(
             context.getString(R.string.finder_open),

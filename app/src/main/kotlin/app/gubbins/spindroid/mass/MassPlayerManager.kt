@@ -115,7 +115,7 @@ class MassPlayerManager(
      *
      * The refresh control beside the card title is the one view of
      * every player the server offers, so each run forgets the drops,
-     * the way the plus of the Source card does: the players a swipe
+     * the way the finder of the Source card does: the players a swipe
      * hid come back, and the card holds the whole answer of the server
      * again. The reads the app makes on its own keep the drops, so a
      * row a swipe hid stays away while the app reads after a choice.

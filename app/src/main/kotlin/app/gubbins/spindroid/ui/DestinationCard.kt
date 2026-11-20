@@ -77,7 +77,7 @@ internal fun DestinationCard(
                 )
                 // The list exists only with an account, so the refresh
                 // control sits with it. Each run forgets the drops, the
-                // way the plus of the Source card does.
+                // way the finder of the Source card does.
                 if (signedIn) {
                     IconButton(onClick = onRefresh) {
                         Icon(
