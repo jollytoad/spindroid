@@ -58,6 +58,14 @@ scenarios fail. `runBdd` parses the output and fails the build on failure.
 The emulator supports playback capture poorly and passes mDNS unreliably.
 Use a physical device for capture and discovery work.
 
+## Nightly releases
+
+`.github/workflows/nightly.yml` releases a dated debug APK when a
+production file changed since the last nightly. Each release adds an
+entry to `CHANGELOG.md` and pushes the file to `main` as
+`github-actions[bot]`. Pull `main` before you push work that follows
+a nightly, or the push is rejected.
+
 ## Sandbox limits (agent environment)
 
 `pkgx` fails inside the agent sandbox with `Os { code: 17, kind:
