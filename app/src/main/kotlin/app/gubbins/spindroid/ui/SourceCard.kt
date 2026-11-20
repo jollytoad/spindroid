@@ -2,7 +2,6 @@ package app.gubbins.spindroid.ui
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -247,8 +246,12 @@ private fun PauseMark(description: String, modifier: Modifier = Modifier) {
  * The app's own icon, with the label's first letter in its place when
  * the package has no icon to draw.
  *
- * The letter stands in on the harness too, where the offered packages
- * are names, not installed apps. A tap on the icon opens the app.
+ * The icon draws whole and wears one rounded square, whatever shape
+ * its own art carries: a crop to the launcher's visible zone cut the
+ * art that some apps lay past it, and the rows read better with one
+ * shape. The letter stands in on the harness too, where the offered
+ * packages are names, not installed apps. A tap on the icon opens
+ * the app.
  */
 @Composable
 private fun AppIcon(
@@ -269,13 +272,15 @@ private fun AppIcon(
             Image(
                 bitmap = bitmap,
                 contentDescription = stringResource(R.string.open_app, label),
-                modifier = Modifier.size(IconSize),
+                modifier = Modifier
+                    .size(IconSize)
+                    .clip(IconShape),
             )
         } else {
             Box(
                 modifier = Modifier
                     .size(IconSize)
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.primary, IconShape)
                     .semantics {
                         contentDescription = context.getString(R.string.open_app, label)
                     },
@@ -294,20 +299,18 @@ private fun AppIcon(
 /** The edge of the icon that the rows show. */
 private val IconSize = 40.dp
 
+/** The rounded square that every app icon wears, real art or letter. */
+private val IconShape = RoundedCornerShape(10.dp)
+
 /** Draws one package icon into a bitmap of the size the row shows. */
 private fun drawableToBitmap(drawable: Drawable, sizePx: Int): Bitmap {
     val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    // An adaptive icon carries a rim of invisible padding, so the
-    // drawing crops a quarter aside on every edge, and the art fills
-    // the box the way the launcher shows it.
-    val rim = if (drawable is AdaptiveIconDrawable) sizePx * 0.25f else 0f
-    drawable.setBounds(
-        -rim.toInt(),
-        -rim.toInt(),
-        (sizePx + rim).toInt(),
-        (sizePx + rim).toInt(),
-    )
+    // The icon draws whole: an adaptive icon carries its own padding
+    // on the canvas, and a crop to the visible zone cut the art that
+    // some apps lay past it, like a wordmark or a letter set. The
+    // rounded square of the row masks the shape.
+    drawable.setBounds(0, 0, sizePx, sizePx)
     drawable.draw(canvas)
     return bitmap
 }

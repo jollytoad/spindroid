@@ -17,7 +17,7 @@
 
   <!-- Row 1: TIDAL - picked (tinted row) and playing (bars, pause) -->
   <rect x="26" y="132" width="348" height="80" rx="40" fill="#d6e4ff"/>
-  <circle cx="62" cy="172" r="18" fill="#1b3a5c"/>
+  <rect x="44" y="154" width="36" height="36" rx="10" fill="#1b3a5c"/>
   <path d="M55 164 h4 v16 h-4 z M61 164 h4 v16 h-4 z M67 164 h4 v16 h-4 z" fill="#ffffff"/>
   <text x="90" y="166" font-size="15" font-weight="bold" fill="#1a1b1e">TIDAL</text>
   <text x="90" y="186" font-size="11" fill="#5d6a78">Belfast - Orbital</text>
@@ -34,7 +34,7 @@
 
   <!-- Row 2: Spotify - playing, not picked -->
   <rect x="26" y="224" width="348" height="80" rx="40" fill="#f0f4fa"/>
-  <circle cx="62" cy="264" r="18" fill="#1db954"/>
+  <rect x="44" y="246" width="36" height="36" rx="10" fill="#1db954"/>
   <path d="M54 258 q14 -6 24 2 M54 266 q12 -5 20 2 M55 273 q10 -4 16 2" stroke="#f0f4fa" stroke-width="3" fill="none" stroke-linecap="round"/>
   <text x="90" y="252" font-size="15" font-weight="bold" fill="#1a1b1e">Spotify</text>
   <g fill="#283593">
