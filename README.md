@@ -37,6 +37,10 @@ media app on the phone becomes a source for the whole player set:
 4. The server resamples the audio and distributes it to the picked player,
    or to any speaker group.
 
+<p align="center">
+  <img src="art/screen-streaming.png" alt="The screen mid-stream. The Source card lists four media apps, with Tidal picked, playing, and carrying its pause button. The Destination card lists two players, with Garage picked and the live output bars riding its tint. The control in the bar reads Disconnect." width="320">
+</p>
+
 The phone appears in [Music Assistant](https://www.music-assistant.io/)
 under Live Inputs, like any other source. Transport controls on the Source
 card rows drive the picked app directly.
