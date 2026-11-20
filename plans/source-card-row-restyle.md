@@ -3,8 +3,10 @@
 The Source card keeps its model and drops its radio buttons. The rows
 become tinted, selectable rows, each row carries a handful of verbs
 and two state marks, and a `+` finder brings the installed media apps
-that hold no session. This plan covers the Source card alone; the
-Destination card keeps its radios until this pattern is proven.
+that hold no session. This plan covered the Source card alone when it
+landed; the pattern is proven now, and the Destination card carries
+the same swipe. Its rules live in
+[two-card-ux.md](two-card-ux.md), behaviour 12.
 
 ## Why the radios go
 
@@ -47,9 +49,9 @@ already on the card.
    and whatever was playing keeps playing.
 4. **Discard.** A horizontal swipe on a discovered row discards the
    app, the way an email app archives a message. The row leaves the
-   list, and the app does not come back from the `+` probe until the
-   user undoes the discard. A snackbar carries the undo, like email
-   apps do.
+   list until the next `+` run, which brings every dropped row back;
+   there is no undo affordance of its own (see the discard rules
+   below).
 5. **Follow.** No tap: the focus follower still moves the pick on its
    own, so the tint moves without a hand.
 
@@ -91,7 +93,10 @@ app is a bigger side effect than the tap seems to promise.
    next `+` run: every run offers every installed media app again, so
    the plus is also the review of the buried. The drop lives in
    memory alone, because nothing outlives the next run.
-4. **Undo.** The snackbar after a swipe restores the app on tap.
+4. **No undo.** The drop carries no snackbar and no button: the
+   reversal is the `+` itself, which brings the whole list back one
+   tap later. (An earlier draft showed an undo snackbar; the host
+   never reached the screen, and the mockup never asked for one.)
 
 ## What does not change
 
@@ -108,7 +113,7 @@ app is a bigger side effect than the tap seems to promise.
 
 ## The mock-up
 
-![The Source card with the + finder, tinted rows, the pick as tint, the bars mark, the icons, one transport button, and a discard swipe with undo.](mockups/08-source-row-restyle.svg)
+![The Source card with the + finder, tinted rows, the pick as tint, the bars mark, the icons, one transport button, and a discard swipe.](mockups/08-source-row-restyle.svg)
 
 ## The open decisions
 

@@ -98,7 +98,7 @@ class MassPlayerManager(
                     mutableState.value.copy(
                         loading = false,
                         error = null,
-                        players = targets(result.players),
+                        players = MassPlayerRules.visible(result.players, mutableState.value.discarded),
                         allPlayers = result.players,
                     ),
                 )
@@ -108,6 +108,33 @@ class MassPlayerManager(
                 )
             }
         }
+    }
+
+    /**
+     * Reads the list again, and forgets every drop.
+     *
+     * The refresh control beside the card title is the one view of
+     * every player the server offers, so each run forgets the drops,
+     * the way the plus of the Source card does: the players a swipe
+     * hid come back, and the card holds the whole answer of the server
+     * again. The reads the app makes on its own keep the drops, so a
+     * row a swipe hid stays away while the app reads after a choice.
+     */
+    fun refreshAll() {
+        publish(mutableState.value.copy(discarded = emptySet()))
+        refresh()
+    }
+
+    /** Hides one player from the list, until the refresh control runs. */
+    fun discard(playerId: String) {
+        val state = mutableState.value
+        val dropped = state.discarded + playerId
+        publish(
+            state.copy(
+                discarded = dropped,
+                players = MassPlayerRules.visible(state.allPlayers, dropped),
+            ),
+        )
     }
 
     /**
@@ -258,7 +285,7 @@ class MassPlayerManager(
                     mutableState.value.copy(
                         choosing = null,
                         error = errorOf(playerId, players.players),
-                        players = targets(players.players),
+                        players = MassPlayerRules.visible(players.players, mutableState.value.discarded),
                         allPlayers = players.players,
                     ),
                 )
@@ -356,21 +383,11 @@ class MassPlayerManager(
     /**
      * The places the sound can go.
      *
-     * The server sends every player it knows about: the ones that make
-     * sound, the groups they are in, and the devices that only take sound
-     * in, such as the phone itself. The picker shows one row for each
-     * place the sound can go, so the members of a group are not rows of
-     * their own.
+     * The rules live in [MassPlayerRules], so the tests read them
+     * without a server.
      */
-    private fun targets(players: List<MassPlayer>): List<MassPlayer> {
-        val known = players.map { it.playerId }.toSet()
-        return players
-            .filter { it.playsAudio }
-            .filter { it.enabled && !it.hideInUi && !it.isPrivate && !it.needsSetup }
-            .filter { it.activeGroup == null || it.activeGroup !in known }
-            .filter { it.syncedTo == null || it.syncedTo !in known }
-            .sortedWith(compareByDescending<MassPlayer> { it.available }.thenBy { it.label.lowercase() })
-    }
+    private fun targets(players: List<MassPlayer>): List<MassPlayer> =
+        MassPlayerRules.targets(players)
 
     /**
      * The reason the choice failed, or nothing when it worked.

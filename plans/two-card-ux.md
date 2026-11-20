@@ -213,6 +213,15 @@ round-3 contract for the tap-through mock and then the wiring.
 11. **The layout adapts to width.** Portrait stacks the cards; landscape
     places them side by side. The state, the selections, and the Connect
     control are identical in both.
+12. **A swipe drops a destination row until the refresh.** A swipe
+    aside hides one player row. The row that carries the pick refuses
+    the swipe, the way a session row does on the Source card. The
+    refresh control beside the Destination title reads the list again
+    and forgets every drop, so the card holds the whole answer of the
+    server again. The drop carries no undo affordance; the refresh is
+    the reversal. The drop lives in memory alone, and the reads the
+    app makes on its own keep the drops, so a hidden row stays hidden
+    while a choice re-reads the list.
 
 ## Related plans
 

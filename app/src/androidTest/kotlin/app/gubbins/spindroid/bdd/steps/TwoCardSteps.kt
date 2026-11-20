@@ -325,6 +325,58 @@ class TwoCardSteps {
         composeRule.waitForIdle()
     }
 
+    @When("the first player row is swiped aside")
+    fun theFirstPlayerRowIsSwipedAside() {
+        swipePlayerRowAside(ServerPlayers.firstLabel())
+    }
+
+    @When("the second player row is swiped aside")
+    fun theSecondPlayerRowIsSwipedAside() {
+        swipePlayerRowAside(ServerPlayers.secondLabel())
+    }
+
+    /** Swipes one player row aside, the way a user's hand would. */
+    private fun swipePlayerRowAside(label: String) {
+        composeRule.waitForIdle()
+        composeRule.onNode(row(label)).performScrollTo().performTouchInput { swipeLeft() }
+        composeRule.waitForIdle()
+    }
+
+    @When("the destination refresh is chosen")
+    fun theDestinationRefreshIsChosen() {
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.players_refresh),
+        ).performClick()
+        composeRule.waitForIdle()
+    }
+
+    @Then("the Destination card no longer lists the second player")
+    fun theDestinationCardNoLongerListsTheSecondPlayer() {
+        val label = ServerPlayers.secondLabel()
+        composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(row(label)).fetchSemanticsNodes().isEmpty()
+        }
+    }
+
+    @Then("the Destination card lists the second player again")
+    fun theDestinationCardListsTheSecondPlayerAgain() {
+        // The refresh reads the list again and forgets every drop, so
+        // the row the swipe hid comes back.
+        val label = ServerPlayers.secondLabel()
+        composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(row(label)).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNode(row(label)).performScrollTo().assertIsDisplayed()
+    }
+
+    @Then("the Destination card still lists the first player")
+    fun theDestinationCardStillListsTheFirstPlayer() {
+        val label = ServerPlayers.firstLabel()
+        composeRule.waitForIdle()
+        composeRule.onNode(row(label)).performScrollTo().assertIsDisplayed()
+    }
+
     @Then("the finder offers {string} again")
     fun theFinderOffersAgain(app: String) {
         // The probe runs again through the plus, and every run forgets

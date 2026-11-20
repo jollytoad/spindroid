@@ -14,6 +14,8 @@ import app.gubbins.mass.MassPlayer
  * @param choosing the player that is being pointed at the phone right now
  * @param livePlayerId the player that the server last pointed at the phone,
  *   while the routing runs; the row of this player carries the bars
+ * @param discarded the players a swipe hid from the list, until the
+ *   refresh control runs
  * @param error the reason the last attempt failed
  */
 data class MassPlayerState(
@@ -22,5 +24,6 @@ data class MassPlayerState(
     val loading: Boolean = false,
     val choosing: String? = null,
     val livePlayerId: String? = null,
+    val discarded: Set<String> = emptySet(),
     val error: String? = null,
 )

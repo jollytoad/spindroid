@@ -203,12 +203,6 @@ object SessionApps {
         refreshDisplay()
     }
 
-    /** Takes one hidden app back, when the snackbar undo runs. */
-    fun undoDiscard(packageName: String) {
-        mutableDiscarded.value = mutableDiscarded.value - packageName
-        refreshDisplay()
-    }
-
     /** Forgets every hidden app. The test hook uses it to start clean. */
     fun resetDiscards() {
         mutableDiscarded.value = emptySet()

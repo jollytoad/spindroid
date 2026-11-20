@@ -16,8 +16,6 @@
 
     <!-- The finder of the Source card. -->
     <string name="finder_open">Find the installed media apps</string>
-    <string name="discarded">%1$s discarded</string>
-    <string name="action_undo">Undo</string>
 
     <!-- The Music Assistant that the phone found. -->
     <string name="server_searching">Looking for Music Assistant on the local network…</string>
@@ -64,6 +62,7 @@
     <string name="players_not_available">Not available</string>
     <string name="players_not_live">The phone is not connected to the server, so it has no sound to send yet. Connect it first.</string>
     <string name="players_send">send the audio of the phone to this player</string>
+    <string name="players_refresh">Read the player list again</string>
     <string name="action_refresh">Refresh</string>
 
     <!-- The status panel. -->

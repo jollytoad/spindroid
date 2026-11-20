@@ -3,17 +3,12 @@ package app.gubbins.spindroid.ui
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -21,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Card
@@ -30,15 +24,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,7 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.gubbins.spindroid.R
 import app.gubbins.spindroid.capture.SessionApps
-import kotlinx.coroutines.flow.first
 
 /**
  * The card that lists the sources.
@@ -320,11 +308,10 @@ private fun drawableToBitmap(drawable: Drawable, sizePx: Int): Bitmap {
  *
  * The row is dimmed and carries no transport buttons. A swipe to the
  * left drops it from the list until the next run of the plus: the
- * native swipe box drives the gesture, and the row shrinks and fades
+ * shared swipe box drives the gesture, and the row shrinks and fades
  * away, so the rows under it rise in step with the collapse. The
- * model drops the row only once the collapse has settled, and the
- * snackbar with the undo shows over the screen. Tapping the row picks
- * the app; tapping the app's icon opens it.
+ * model drops the row only once the collapse has settled. Tapping
+ * the row picks the app; tapping the app's icon opens it.
  */
 @Composable
 private fun DiscoveredRow(
@@ -334,63 +321,13 @@ private fun DiscoveredRow(
     onDiscard: () -> Unit,
     onOpen: () -> Unit,
 ) {
-    // The visible state of the row is the one truth of its leaving: the
-    // swipe sets the target to false, the collapse animation runs to
-    // that target, and the effect below hands the discard over once
-    // the collapse has settled.
-    val shown = remember { MutableTransitionState(true) }
-
-    LaunchedEffect(shown) {
-        // An idle state whose target is false means the collapse ended.
-        snapshotFlow { shown.isIdle && !shown.targetState }.first { it }
-        onDiscard()
-    }
-
-    AnimatedVisibility(
-        visibleState = shown,
-        exit = fadeOut() + shrinkVertically(),
-    ) {
-        // The clip holds the sliding face inside the row, the way the
-        // card holds every row inside its own bounds.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp)),
-        ) {
-            val state = rememberSwipeToDismissBoxState(
-                confirmValueChange = { value ->
-                    when (value) {
-                        SwipeToDismissBoxValue.EndToStart -> {
-                            shown.targetState = false
-                            true
-                        }
-                        else -> false
-                    }
-                },
-                positionalThreshold = { totalDistance -> totalDistance * 0.4f },
-            )
-            SwipeToDismissBox(
-                state = state,
-                enableDismissFromStartToEnd = false,
-                backgroundContent = {
-                    // The M3 pattern paints nothing at rest, so the
-                    // band shows only while the swipe displaces the
-                    // face, and its colour follows the swipe.
-                    when (state.dismissDirection) {
-                        SwipeToDismissBoxValue.EndToStart ->
-                            DiscardBand(progress = state.progress)
-                        else -> {}
-                    }
-                },
-            ) {
-                DiscoveredFace(
-                    app = app,
-                    picked = picked,
-                    onPick = onPick,
-                    onOpen = onOpen,
-                )
-            }
-        }
+    SwipeAsideRow(onDrop = onDiscard) {
+        DiscoveredFace(
+            app = app,
+            picked = picked,
+            onPick = onPick,
+            onOpen = onOpen,
+        )
     }
 }
 
@@ -432,37 +369,6 @@ private fun DiscoveredFace(
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/**
- * The band the swipe reveals behind the row.
- *
- * The band paints only while the face slides aside, and its colour
- * follows the swipe, so the discard grows in with the drag. The trash
- * mark speaks through the discard itself, which the row already names
- * for the screen reader, so the mark carries no description of its
- * own.
- */
-@Composable
-private fun DiscardBand(progress: Float) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
-            .background(
-                MaterialTheme.colorScheme.error.copy(alpha = progress),
-                RoundedCornerShape(28.dp),
-            )
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Delete,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onError.copy(alpha = progress),
         )
     }
 }

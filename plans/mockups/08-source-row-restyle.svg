@@ -73,9 +73,7 @@
     <rect x="330" y="516" width="12" height="22" rx="2"/>
     <path d="M325 516 h22 M333 516 v-4 h6 v4 M334 520 v12 M340 520 v12 M346 520 v12"/>
   </g>
-  <text x="60" y="528" font-size="11" fill="#ffffff">Prime Video discarded</text>
-  <text x="60" y="546" font-size="11" fill="#ffcdd2">UNDO</text>
-  <text x="34" y="584" font-size="10" fill="#8a97a3">swipe a discovered row aside to discard it, with an UNDO</text>
+  <text x="34" y="584" font-size="10" fill="#8a97a3">swipe a discovered row aside to discard it; the plus brings it back</text>
 
   <!-- The verbs key -->
   <text x="34" y="624" font-size="11" font-weight="bold" fill="#1a1b1e">The verbs</text>
@@ -85,6 +83,7 @@
     <text x="34" y="686">open the app        tap the icon on the left</text>
     <text x="34" y="706">discard             swipe a discovered row aside</text>
     <text x="34" y="726">follow the focus    no tap: the tint moves itself</text>
+    <text x="34" y="746">drop a player       swipe a destination row aside</text>
   </g>
   <g font-size="11" fill="#5d6a78">
     <text x="34" y="756">tinted row = picked (being captured)</text>
@@ -96,4 +95,9 @@
   <!-- Bottom card stub, for context -->
   <rect x="16" y="836" width="368" height="60" rx="24" fill="#f0f4fa"/>
   <text x="34" y="868" font-size="15" fill="#5d6a78">Destination</text>
+  <!-- The refresh control, right of the title: reads the list again, forgets the drops -->
+  <circle cx="348" cy="862" r="16" fill="#283593"/>
+  <path d="M348 853 a9 9 0 1 0 9 9" stroke="#ffffff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M357 856 l-3 5.5 h6 z" fill="#ffffff"/>
+  <text x="34" y="912" font-size="10" fill="#8a97a3">the refresh reads the player list again and forgets every drop</text>
 </svg>

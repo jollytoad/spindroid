@@ -10,8 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -67,12 +65,13 @@ fun MainScreen(
     onSessionPause: (String) -> Unit,
     onOpenSession: (String) -> Unit,
     onPickPlayer: (String) -> Unit,
+    onDiscardPlayer: (String) -> Unit,
+    onRefreshPlayers: () -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onCopyToken: () -> Unit,
     onOpenFinder: () -> Unit,
     onDiscard: (String) -> Unit,
-    snackbarHostState: SnackbarHostState,
     onOpenSignIn: () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -153,6 +152,8 @@ fun MainScreen(
                         onSignIn = onOpenSignIn,
                         onPair = { scope.launch { scrollState.animateScrollTo(pairingTop) } },
                         onPick = onPickPlayer,
+                        onDiscard = onDiscardPlayer,
+                        onRefresh = onRefreshPlayers,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -182,6 +183,8 @@ fun MainScreen(
                         onSignIn = onOpenSignIn,
                         onPair = { scope.launch { scrollState.animateScrollTo(pairingTop) } },
                         onPick = onPickPlayer,
+                        onDiscard = onDiscardPlayer,
+                        onRefresh = onRefreshPlayers,
                     )
                 }
             }
@@ -214,8 +217,6 @@ fun MainScreen(
                 buildLabel = buildLabel,
             )
         }
-
-        SnackbarHost(hostState = snackbarHostState)
     }
 }
 

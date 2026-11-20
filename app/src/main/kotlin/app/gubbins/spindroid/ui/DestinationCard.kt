@@ -9,13 +9,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -37,7 +41,10 @@ import app.gubbins.spindroid.mass.playerIconOf
  * Before the account exists, the card holds the Music Assistant that the
  * phone found and the two ways to connect. After it, the card lists the
  * players, and the row pick sends the audio of the phone to the one
- * player it names.
+ * player it names. A swipe aside drops a row from the list until the
+ * refresh control beside the title runs, which reads the list again and
+ * forgets every drop. The row that carries the pick refuses the swipe,
+ * the way a session row does on the Source card.
  */
 @Composable
 internal fun DestinationCard(
@@ -53,6 +60,8 @@ internal fun DestinationCard(
     onSignIn: () -> Unit,
     onPair: () -> Unit,
     onPick: (String) -> Unit,
+    onDiscard: (String) -> Unit,
+    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
@@ -60,10 +69,24 @@ internal fun DestinationCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = stringResource(R.string.title_destination),
-                style = MaterialTheme.typography.titleMedium,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.title_destination),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                // The list exists only with an account, so the refresh
+                // control sits with it. Each run forgets the drops, the
+                // way the plus of the Source card does.
+                if (signedIn) {
+                    IconButton(onClick = onRefresh) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = stringResource(R.string.players_refresh),
+                        )
+                    }
+                }
+            }
             when {
                 signedIn -> {
                     if (!live) {
@@ -84,16 +107,43 @@ internal fun DestinationCard(
                         )
 
                         else -> players.players.forEach { player ->
-                            PlayerRow(
-                                player = player,
-                                names = players.allPlayers.associate { it.playerId to it.label },
-                                picked = playerPick == player.playerId,
-                                live = player.playerId == players.livePlayerId,
-                                level = level,
-                                busy = players.choosing == player.playerId,
-                                canPick = player.available,
-                                onPick = { onPick(player.playerId) },
-                            )
+                            // A row carries remembered state, and the list
+                            // changes in the middle when a discard lands,
+                            // so every row keeps its own composition key.
+                            key(player.playerId) {
+                                if (playerPick == player.playerId) {
+                                    // The picked row is the one the stream
+                                    // goes to, so it refuses the swipe, the
+                                    // way a session row does on the Source
+                                    // card: the row that carries the stream
+                                    // cannot be dropped.
+                                    PlayerRow(
+                                        player = player,
+                                        names = players.allPlayers.associate { it.playerId to it.label },
+                                        picked = true,
+                                        live = player.playerId == players.livePlayerId,
+                                        level = level,
+                                        busy = players.choosing == player.playerId,
+                                        canPick = player.available,
+                                        onPick = { onPick(player.playerId) },
+                                    )
+                                } else {
+                                    SwipeAsideRow(
+                                        onDrop = { onDiscard(player.playerId) },
+                                    ) {
+                                        PlayerRow(
+                                            player = player,
+                                            names = players.allPlayers.associate { it.playerId to it.label },
+                                            picked = false,
+                                            live = player.playerId == players.livePlayerId,
+                                            level = level,
+                                            busy = players.choosing == player.playerId,
+                                            canPick = player.available,
+                                            onPick = { onPick(player.playerId) },
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                     players.error?.let { message ->
@@ -145,6 +195,8 @@ internal fun DestinationCard(
  * the bars mark the player that the stream plays on now, and the glyph
  * names the kind of the player the way the server sees it. Tapping
  * anywhere on the row sends the audio of the phone to this player.
+ * The row serves as the face of the swipe box on the rows that a
+ * swipe can drop.
  */
 @Composable
 private fun PlayerRow(

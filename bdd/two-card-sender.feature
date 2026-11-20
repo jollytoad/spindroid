@@ -4,7 +4,10 @@ Feature: The two-card sender screen
   The primary screen of SpinDroid is two always-present cards.
   The Source card lists the apps that hold a media session, and the
   Destination card lists the players the network offers. Connect
-  streams the picked source to the picked destination.
+  streams the picked source to the picked destination. A swipe
+  drops a destination row until the refresh control beside the title
+  reads the list again, and the row that carries the pick refuses
+  the swipe.
 
   @requires-music-assistant
   Scenario: An empty screen on first open
@@ -125,6 +128,26 @@ Feature: The two-card sender screen
     When "Disconnect" is pressed
     Then the stream stops
     And the destination stops playing the phone
+
+  @requires-music-assistant
+  Scenario: A swipe discards a destination player
+    Given "Sign into Music Assistant" is chosen
+    And the sign in form is filled with the Music Assistant account
+    And "Sign in" is pressed
+    And the app is signed into Music Assistant
+    When the second player row is swiped aside
+    Then the Destination card no longer lists the second player
+    When the destination refresh is chosen
+    Then the Destination card lists the second player again
+
+  @requires-music-assistant
+  Scenario: The picked destination row refuses the swipe
+    Given the stream sends Tidal's audio to the first player
+    When the first player row is swiped aside
+    Then the Destination card still lists the first player
+    And the first player stays picked on the Destination card
+    When "Disconnect" is pressed
+    Then the stream stops
 
   @requires-music-assistant
   Scenario: The live destination row carries the bars
