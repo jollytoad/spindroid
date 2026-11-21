@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
@@ -329,7 +330,9 @@ private fun PlayerRow(
             }
         }
         onStop?.let { stop ->
-            IconButton(onClick = stop) {
+            // The circle matches the transport buttons of the Source
+            // card, so every round control on a row reads as one family.
+            OutlinedIconButton(onClick = stop) {
                 Icon(
                     imageVector = Icons.Rounded.Stop,
                     contentDescription = stringResource(R.string.stop_stream),
