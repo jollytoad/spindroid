@@ -282,6 +282,20 @@ class TwoCardSteps {
         }
     }
 
+    @Given("the phone holds no media session")
+    fun thePhoneHoldsNoMediaSession() {
+        // A session that rests still shows a row, so a scenario that
+        // reads an empty Source card needs a phone where no app holds
+        // one at all. Every holder is stopped, playing or not.
+        val holders = SessionApps.apps.value.filter {
+            it.packageName != context.packageName
+        }
+        holders.forEach { forceStop(it.packageName) }
+        awaitUntil(AWAIT_QUIET_MILLIS) {
+            SessionApps.apps.value.none { it.packageName != context.packageName }
+        }
+    }
+
     @Given("the finder offers {word} from this phone")
     fun theFinderOffersTheRealApp(label: String) {
         val manager = context.packageManager

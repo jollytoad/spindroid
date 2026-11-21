@@ -13,6 +13,7 @@ Feature: The two-card sender screen
   Scenario: An empty screen on first open
     Given a fresh install
     And a Music Assistant is present on the network
+    And the phone holds no media session
     When the app opens
     Then the Connect control is disabled
     And the Source card says that no app holds a media session
