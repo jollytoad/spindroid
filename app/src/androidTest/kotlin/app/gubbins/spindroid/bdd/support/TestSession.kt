@@ -66,6 +66,30 @@ object TestSession {
         }
     }
 
+    /**
+     * Starts a session the way the real apps do: the session activates
+     * with a playback state and no track, and the track arrives only
+     * when the scenario publishes it.
+     */
+    fun startQuiet(playing: Boolean) {
+        onMain {
+            releaseNow()
+            val fresh = MediaSession(context, "SpinDroid BDD session")
+            fresh.setCallback(object : MediaSession.Callback() {
+                override fun onPlay() = setState(true)
+                override fun onPause() = setState(false)
+            })
+            fresh.setPlaybackState(stateOf(playing))
+            fresh.isActive = true
+            sessionMedia = fresh
+        }
+    }
+
+    /** Publishes the track of the quiet session, the way playback does. */
+    fun publishTitle(track: String) {
+        onMain { sessionMedia?.setMetadata(metadataOf(track)) }
+    }
+
     /** Drops the session, the way an app tears its session down. */
     fun release() {
         onMain { releaseNow() }

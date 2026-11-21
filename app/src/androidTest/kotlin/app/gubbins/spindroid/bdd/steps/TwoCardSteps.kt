@@ -124,6 +124,28 @@ class TwoCardSteps {
         waitForRow(app)
     }
 
+    @When("{word} starts a quiet media session")
+    fun appStartsAQuietMediaSession(app: String) {
+        // The quiet session follows the real order of the phone apps:
+        // the session activates with a playback state and no track, so
+        // no session change announces the track later. The row carries
+        // the label of the test process, not the name of the app,
+        // until the track step names it.
+        TestSession.startQuiet(playing = true)
+        waitForRow("SpinDroid")
+    }
+
+    @When("{word} names its track")
+    fun appNamesItsTrack(app: String) {
+        TestSession.publishTitle(title(app))
+        // The track rides the controller callback of the session, and
+        // no session change announces it, so the step waits until the
+        // row reads the track.
+        composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(row(title(app))).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     @When("Mellow drops its media session")
     fun mellowDropsItsMediaSession() {
         TestSession.release()

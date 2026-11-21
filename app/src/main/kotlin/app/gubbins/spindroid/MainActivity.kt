@@ -279,6 +279,15 @@ class MainActivity : ComponentActivity() {
         discovery.start()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // A return to the app reads the phone again: a session that
+        // started while the app stood behind another one can miss the
+        // change event, and the card must not hold the stale rows
+        // until the next change.
+        SessionApps.reread()
+    }
+
     override fun onDestroy() {
         discovery.stop()
         pairing.close()

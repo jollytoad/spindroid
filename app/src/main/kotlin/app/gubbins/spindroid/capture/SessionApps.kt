@@ -369,8 +369,15 @@ object SessionApps {
         }
     }
 
-    /** Reads the sessions again on the next loop pass. */
-    private fun reread() {
+    /**
+     * Reads the sessions again on the next loop pass.
+     *
+     * The controller callbacks and the listener binding come here, and
+     * so does the return to the app: a change that arrived while the
+     * app stood behind another one can miss the change event, and the
+     * card must not hold the stale rows until the next change.
+     */
+    fun reread() {
         val appContext = context ?: return
         handler.post { read(appContext) }
     }
@@ -390,10 +397,11 @@ object SessionApps {
     /**
      * Reads the sessions of the device, and keeps one controller per app.
      *
-     * The list holds every session that publishes metadata, including a
-     * session of the app itself if one existed. In normal use the sender
-     * holds none, and the BDD scenarios need their own session, which the
-     * instrumentation creates in the app process.
+     * The list holds every session that shows something: a session
+     * either publishes its track, or its playback state says it plays
+     * or rests. In normal use the sender holds no session, and the BDD
+     * scenarios need their own session, which the instrumentation
+     * creates in the app process.
      */
     private fun read(appContext: Context) {
         val sessionManager = manager ?: return
@@ -408,8 +416,13 @@ object SessionApps {
         mutableAccessMissing.value = false
         val fresh = mutableMapOf<String, MediaController>()
         val currentPackages = mutableSetOf<String>()
+        // Every active session carries a callback, whatever it shows
+        // now: an app activates its session before it plays, and
+        // publishes its track only when playback runs, so a session
+        // that shows nothing today must still tell the card when it
+        // starts to show something. No session change announces that
+        // moment, and the reading must not wait for one.
         val list = sessions
-            .filter { it.metadata != null }
             .distinctBy { it.packageName }
             .mapNotNull { controller ->
                 fresh[controller.packageName] = controller
@@ -436,9 +449,20 @@ object SessionApps {
         refreshDisplay()
     }
 
-    /** One row of the list, or null when the app cannot be named. */
+    /**
+     * One row of the list, or null when the session shows nothing yet.
+     *
+     * A row shows when the session publishes a track, or when its
+     * playback state says it plays or rests. A session with neither is
+     * a promise the card lists no row for, but the callback stays on
+     * the session, so the row comes when the promise turns real.
+     */
     private fun appOf(appContext: Context, controller: MediaController): SessionApp? {
         val packageName = controller.packageName
+        val state = controller.playbackState
+        if (controller.metadata == null && (state == null || state.state == PlaybackState.STATE_NONE)) {
+            return null
+        }
         return try {
             val info = appContext.packageManager.getApplicationInfo(packageName, 0)
             val uid = appContext.packageManager.getPackageUid(packageName, 0)

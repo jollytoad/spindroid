@@ -40,6 +40,19 @@ Feature: Add sources to the card
     Then the rows read "Mellow"
 
   @discovery
+  Scenario: A session shows its row before it names its track
+    Given the app is open
+    And no media app holds a session
+    And the finder offers "Mellow" as an installed media app
+    When the finder is chosen
+    Then the Source card lists Mellow
+    And Mellow starts a quiet media session
+    Then the rows read "Mellow, SpinDroid"
+    And the SpinDroid row offers Pause
+    When Mellow names its track
+    Then the rows read "Mellow"
+
+  @discovery
   Scenario: A swipe discards a discovered app
     Given the finder offers "Radio" and "Tidal" as installed media apps
     When the finder is chosen
