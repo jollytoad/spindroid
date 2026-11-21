@@ -169,23 +169,24 @@ class MassPlayerManager(
      */
     fun startRouting(playerId: String) {
         router?.cancel()
-        val previousPlayerId = routedPlayerId
         routedPlayerId = playerId
         // The bars name the player that the server confirms, so a fresh
         // choice clears them until the confirmation lands.
         publish(mutableState.value.copy(livePlayerId = null))
-        if (previousPlayerId != null && previousPlayerId != playerId) {
-            // The sound goes to the new player alone, so the old one is
-            // stopped rather than left playing a stream it no longer owns.
-            scope.launch {
-                withContext(Dispatchers.IO) {
-                    stopOnServer(previousPlayerId)
-                }
-            }
-        }
         router = scope.launch {
             var played = false
             var attempts = 0
+            // A pick that lands mid-stream meets a session that already
+            // plays, so the played guard below would skip the choose
+            // forever and the sound would go nowhere. The pick selects
+            // the new player at once instead. The old player is left
+            // alone: the server moves the source on its own, the way
+            // the system quiets an app when another one starts to play.
+            if (SessionStateHolder.state.value.streaming ||
+                SessionStateHolder.state.value.serverRequestedAudio
+            ) {
+                withContext(Dispatchers.IO) { choose(playerId) }
+            }
             while (isActive) {
                 delay(2_000)
                 if (SessionStateHolder.running.value != true) {
