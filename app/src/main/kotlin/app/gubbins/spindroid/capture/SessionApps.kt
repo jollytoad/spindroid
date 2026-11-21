@@ -478,7 +478,17 @@ object SessionApps {
                 label = appContext.packageManager.getApplicationLabel(info).toString(),
                 uid = uid,
                 playingNow = controller.playbackState?.state == PlaybackState.STATE_PLAYING,
-                nowPlaying = controller.metadata?.description?.toString(),
+                // The description prints its empty fields as the word
+                // "null" when it is read whole, so the line joins only
+                // the fields that hold text.
+                nowPlaying = controller.metadata?.description
+                    ?.let { line ->
+                        listOfNotNull(
+                            line.title?.toString(),
+                            line.subtitle?.toString(),
+                        ).joinToString(" - ")
+                    }
+                    ?.ifEmpty { null },
                 canPlay = actions and plays != 0L,
                 canPause = actions and pauses != 0L,
             )
