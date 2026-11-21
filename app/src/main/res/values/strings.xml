@@ -52,8 +52,10 @@
     <string name="players_refresh">Read the player list again</string>
     <string name="action_refresh">Refresh</string>
 
-    <!-- The status panel. -->
-    <string name="title_status">Status</string>
+    <!-- The technical details panel. -->
+    <string name="title_technical_guff">Technical Guff</string>
+    <string name="technical_guff_expand">Show the technical details</string>
+    <string name="technical_guff_collapse">Hide the technical details</string>
     <string name="label_connection">Connection</string>
     <string name="label_server_name">Server</string>
     <string name="label_paired">Session pairing</string>

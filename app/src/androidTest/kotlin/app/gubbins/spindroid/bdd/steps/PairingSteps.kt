@@ -6,7 +6,9 @@ import androidx.compose.ui.test.hasAnySibling
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -120,15 +122,31 @@ class PairingSteps {
     }
 
     /**
-     * The status panel names the pairing that the app made on its own.
+     * The technical details name the pairing that the app made on its own.
+     *
+     * The sign-in still runs when this step starts, so the step waits
+     * for the header of the details before it reads them. They fold
+     * away on a fresh open, so the step opens them, and the card may
+     * sit below the fold of the screen, so the header scrolls into
+     * view before the tap. The header says which way the fold goes,
+     * so a card that already stands open keeps standing.
      *
      * The server may take a while to pair the phone, so the step waits
      * longer than a step that only reads the screen. The row of the
-     * panel carries the answer beside its label, so the sibling picks
+     * card carries the answer beside its label, so the sibling picks
      * the row out of every other "Yes" the screen may hold.
      */
     @Then("the status says that the phone is paired")
     fun theStatusSaysThatThePhoneIsPaired() {
+        val expand = context.getString(R.string.technical_guff_expand)
+        val collapse = context.getString(R.string.technical_guff_collapse)
+        composeRule.waitUntil(PAIRING_TIMEOUT_MILLIS) {
+            composeRule.onAllNodesWithContentDescription(expand).fetchSemanticsNodes().isNotEmpty() ||
+                composeRule.onAllNodesWithContentDescription(collapse).fetchSemanticsNodes().isNotEmpty()
+        }
+        if (composeRule.onAllNodesWithContentDescription(expand).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithContentDescription(expand).performScrollTo().performClick()
+        }
         val paired = hasText(context.getString(R.string.value_yes)) and
             hasAnySibling(hasText(context.getString(R.string.label_paired)))
         composeRule.waitUntil(PAIRING_TIMEOUT_MILLIS) {
