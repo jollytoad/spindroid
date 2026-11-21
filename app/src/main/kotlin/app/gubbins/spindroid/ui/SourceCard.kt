@@ -165,8 +165,11 @@ internal fun SourceCard(
  * sound while the row is the one the stream takes, the bars mark the
  * app that plays now, and the one round button on the trailing edge
  * drives the app's session — pause while the app plays, play while it
- * rests, and no button when the session honours neither. Tapping the
- * app's icon opens the app; tapping anywhere else on the row picks it.
+ * rests, and no button when the session honours neither. A tap on the
+ * row, or on its icon, opens the app and picks it, the way a
+ * discovered row does: the pick is the only thing the tap changes in
+ * the app, because the app that starts to play quiets the others on
+ * its own.
  */
 @Composable
 private fun SourceRow(
@@ -178,6 +181,14 @@ private fun SourceRow(
     onPause: () -> Unit,
     onOpen: () -> Unit,
 ) {
+    // One tap takes both roads at once: the pick arms the capture for
+    // the moment the app plays, and the open brings the app to the
+    // front. Nothing else happens — a session that starts playing
+    // quiets the other apps through the system, not through this app.
+    val openAndPick = {
+        onPick()
+        onOpen()
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -195,7 +206,7 @@ private fun SourceRow(
             .selectable(
                 selected = picked,
                 role = Role.RadioButton,
-                onClick = onPick,
+                onClick = openAndPick,
             )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -204,7 +215,7 @@ private fun SourceRow(
         AppIcon(
             packageName = app.packageName,
             label = app.label,
-            onOpen = onOpen,
+            onOpen = openAndPick,
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(
