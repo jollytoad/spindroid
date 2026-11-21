@@ -1,10 +1,7 @@
 package app.gubbins.spindroid
 
 import android.Manifest
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
@@ -24,8 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.gubbins.sendspin.crypto.X25519
-import app.gubbins.sendspin.pairing.PairingToken
 import app.gubbins.spindroid.capture.CaptureStatusHolder
 import app.gubbins.spindroid.capture.PlayingAppsListener
 import app.gubbins.spindroid.capture.SessionApps
@@ -36,7 +31,6 @@ import app.gubbins.spindroid.mass.MassPlayerManager
 import app.gubbins.spindroid.mass.MusicAssistantDiscovery
 import app.gubbins.spindroid.service.SpindroidService
 import app.gubbins.spindroid.session.SessionStateHolder
-import app.gubbins.spindroid.storage.EncryptedKeyStore
 import app.gubbins.spindroid.ui.MainScreen
 import app.gubbins.spindroid.ui.SignInScreen
 import androidx.lifecycle.lifecycleScope
@@ -51,11 +45,10 @@ import java.util.Date
 /**
  * The only screen of the app.
  *
- * It shows the button that starts the capture, the pairing token, and the
+ * It shows the cards that pick the source and the destination, and the
  * state of the connection.
  */
 class MainActivity : ComponentActivity() {
-    private lateinit var keys: EncryptedKeyStore
     private lateinit var accounts: MassAccountManager
     private lateinit var discovery: MusicAssistantDiscovery
     private lateinit var players: MassPlayerManager
@@ -143,7 +136,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        keys = EncryptedKeyStore(this)
         accounts = MassAccountManager(this)
         discovery = MassDiscovery(this)
         players = MassPlayerManager(this, accounts)
@@ -163,13 +155,6 @@ class MainActivity : ComponentActivity() {
             val sessionApps by SessionApps.apps.collectAsStateWithLifecycle()
             val sessionAccessMissing by SessionApps.accessMissing.collectAsStateWithLifecycle()
             val pickedSession by SessionApps.picked.collectAsStateWithLifecycle()
-
-            // The pairings that the phone keeps, read once here and again
-            // whenever a pairing could have arrived or gone.
-            var keptPairings by mutableStateOf(keys.longTermRecords())
-            LaunchedEffect(state.paired, automaticPairing) {
-                keptPairings = keys.longTermRecords()
-            }
 
             // The sessions come from the media sessions of the device, so
             // the reader starts with the screen and stops with it.
@@ -229,7 +214,6 @@ class MainActivity : ComponentActivity() {
                 )
             } else {
                 MainScreen(
-                    pairingToken = pairingToken(),
                     state = state,
                     captureStatus = captureStatus,
                     buildLabel = buildLabel(),
@@ -238,7 +222,6 @@ class MainActivity : ComponentActivity() {
                     account = account,
                     players = playerList,
                     automaticPairing = automaticPairing,
-                    keptPairings = keptPairings,
                     discoveredServer = foundServer,
                     discoveryError = discoveryError,
                     sessionApps = sessionApps,
@@ -263,7 +246,6 @@ class MainActivity : ComponentActivity() {
 
                     onConnect = { connect() },
                     onDisconnect = { disconnect() },
-                    onCopyToken = { copyToken() },
                     onOpenSignIn = { signInPage = true },
                     onSignOut = {
                         pairing.reset()
@@ -427,12 +409,6 @@ class MainActivity : ComponentActivity() {
         stopService(Intent(this, SpindroidService::class.java))
     }
 
-    /** The token the operator pastes into Music Assistant. */
-    private fun pairingToken(): String = PairingToken.encodePairingPsk(
-        X25519.publicKey(keys.staticPrivateKey),
-        keys.pairingPsk,
-    )
-
     /**
      * The version and the time of the build on the phone.
      *
@@ -443,12 +419,5 @@ class MainActivity : ComponentActivity() {
         val info = packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
         val format = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
         return "${info.versionName} · ${format.format(Date(info.lastUpdateTime))}"
-    }
-
-    /** Copies the pairing token to the clipboard. */
-    private fun copyToken() {
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("SpinDroid", pairingToken()))
-        message = getString(R.string.action_copy_done)
     }
 }

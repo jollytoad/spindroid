@@ -2,6 +2,7 @@ package app.gubbins.spindroid.bdd.steps
 
 import android.content.Intent
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnySibling
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -119,18 +120,21 @@ class PairingSteps {
     }
 
     /**
-     * The pairing section names the pairing that the app made on its own.
+     * The status panel names the pairing that the app made on its own.
      *
      * The server may take a while to pair the phone, so the step waits
-     * longer than a step that only reads the screen.
+     * longer than a step that only reads the screen. The row of the
+     * panel carries the answer beside its label, so the sibling picks
+     * the row out of every other "Yes" the screen may hold.
      */
-    @Then("the pairing section says that the phone is paired")
-    fun thePairingSectionSaysThatThePhoneIsPaired() {
-        val paired = context.getString(R.string.pairing_paired)
+    @Then("the status says that the phone is paired")
+    fun theStatusSaysThatThePhoneIsPaired() {
+        val paired = hasText(context.getString(R.string.value_yes)) and
+            hasAnySibling(hasText(context.getString(R.string.label_paired)))
         composeRule.waitUntil(PAIRING_TIMEOUT_MILLIS) {
-            composeRule.onAllNodesWithText(paired).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodes(paired).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText(paired).performScrollTo().assertIsDisplayed()
+        composeRule.onNode(paired).performScrollTo().assertIsDisplayed()
     }
 
     /** Types a value into the field with the given label. */

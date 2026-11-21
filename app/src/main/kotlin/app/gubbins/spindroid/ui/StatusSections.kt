@@ -8,146 +8,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import app.gubbins.sendspin.pairing.PairingCode
-import app.gubbins.sendspin.psk.PskRecord
 import app.gubbins.sendspin.session.SessionPhase
 import app.gubbins.sendspin.session.SourceSessionState
 import app.gubbins.spindroid.R
 import app.gubbins.spindroid.capture.CaptureStatus
-import app.gubbins.spindroid.mass.AutomaticPairingState
 
 /**
- * The sections below the two cards: the pairing and the status. They
- * serve the setup and the diagnosis, so they sit under the routing
- * that the cards carry.
+ * The status below the two cards. It serves the diagnosis, so it sits
+ * under the routing that the cards carry.
  */
-
-/**
- * The pairing of the phone with a server.
- *
- * An administrator signs in and the phone pairs on its own, so the user
- * only reads the result here. An account without that right cannot start
- * the setup flow, so the token stays visible for the manual pairing.
- */
-@Composable
-internal fun PairingSection(
-    modifier: Modifier = Modifier,
-    pairingToken: String,
-    pairingCode: String?,
-    serverConnected: Boolean,
-    paired: Boolean,
-    keptPairings: List<PskRecord>,
-    automaticPairing: AutomaticPairingState,
-    signedIn: Boolean,
-    administrator: Boolean,
-    onCopyToken: () -> Unit,
-) {
-    // The token is shown when the user asks for it, and also while no
-    // server has called in, because then it is the only way to pair.
-    var tokenVisible by remember { mutableStateOf(false) }
-    val failure = automaticPairing as? AutomaticPairingState.Failed
-    val manual = signedIn && !administrator
-    val showToken = tokenVisible || !serverConnected || manual || failure != null
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.title_pairing),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            when {
-                pairingCode != null -> {
-                    Text(
-                        text = stringResource(R.string.pairing_code_instruction),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = PairingCode.group(pairingCode),
-                        style = MaterialTheme.typography.displayMedium.copy(fontFamily = FontFamily.Monospace),
-                    )
-                }
-
-                paired || automaticPairing is AutomaticPairingState.Paired -> Text(
-                    text = stringResource(R.string.pairing_paired),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-
-                automaticPairing is AutomaticPairingState.Pairing -> Text(
-                    text = stringResource(R.string.pairing_in_progress),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-
-                failure != null -> {
-                    Text(
-                        text = stringResource(R.string.pairing_failed, failure.reason),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(R.string.pairing_explanation),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-
-                keptPairings.isNotEmpty() -> Text(
-                    text = stringResource(
-                        R.string.pairing_kept,
-                        keptPairings.joinToString { it.serverName },
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-
-                manual -> Text(
-                    text = stringResource(R.string.pairing_explanation),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-
-                serverConnected -> Text(
-                    text = stringResource(R.string.pairing_code_where),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-
-                else -> Text(
-                    text = stringResource(R.string.pairing_explanation),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            TextButton(onClick = { tokenVisible = !tokenVisible }) {
-                Text(
-                    stringResource(
-                        if (tokenVisible) R.string.action_hide_token else R.string.action_show_token,
-                    ),
-                )
-            }
-            if (showToken) {
-                Text(
-                    text = stringResource(R.string.label_pairing_token),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    text = pairingToken,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                )
-                OutlinedButton(onClick = onCopyToken) {
-                    Text(stringResource(R.string.action_copy_token))
-                }
-            }
-        }
-    }
-}
 
 /** What the connection is doing. */
 @Composable

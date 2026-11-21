@@ -41,4 +41,4 @@ Feature: SendSpin Source Role
     And "Sign in" is chosen
     And the sign in form is filled with the Music Assistant account
     And "Sign in" is pressed
-    Then the pairing section says that the phone is paired
+    Then the status says that the phone is paired

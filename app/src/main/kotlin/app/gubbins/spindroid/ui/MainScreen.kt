@@ -1,6 +1,7 @@
 package app.gubbins.spindroid.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,13 +11,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import app.gubbins.sendspin.psk.PskRecord
 import app.gubbins.sendspin.session.SourceSessionState
 import app.gubbins.spindroid.R
 import app.gubbins.spindroid.capture.CaptureStatus
@@ -32,12 +37,11 @@ import app.gubbins.spindroid.mass.MassPlayerState
  * Two cards carry the routing: the Source card lists the apps that hold a
  * media session, and the Destination card lists the players that can play
  * the phone. The Connect control in the bar streams the picked source to
- * the picked destination. The pairing and the status stay below, because
- * they serve the setup and the diagnosis.
+ * the picked destination. The status stays below, because it serves the
+ * diagnosis.
  */
 @Composable
 fun MainScreen(
-    pairingToken: String,
     state: SourceSessionState,
     captureStatus: CaptureStatus,
     buildLabel: String,
@@ -46,7 +50,6 @@ fun MainScreen(
     account: MassAccountState,
     players: MassPlayerState,
     automaticPairing: AutomaticPairingState,
-    keptPairings: List<PskRecord>,
     discoveredServer: DiscoveredServer?,
     discoveryError: String?,
     sessionApps: List<SessionApps.SessionApp>,
@@ -65,7 +68,6 @@ fun MainScreen(
     onRefreshPlayers: () -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
-    onCopyToken: () -> Unit,
     onOpenFinder: () -> Unit,
     onDiscard: (String) -> Unit,
     onOpenSignIn: () -> Unit,
@@ -78,134 +80,142 @@ fun MainScreen(
     // stream, so the highlight moves with the sound.
     val fillLevel = fillLevelOf(captureStatus.peak)
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        // The bar does not scroll, so the stream control is always in view.
-        TopBar(
-            running = running,
-            connectEnabled = running || (pickedSession != null && playerPick != null),
-            onConnect = onConnect,
-            onDisconnect = onDisconnect,
-        )
-
-        // The picked app left its session while the stream runs. The
-        // capture keeps sending silence, so the line says what happened.
-        if (running && pickedSession != null && sessionApps.none { it.packageName == pickedSession }) {
-            Text(
-                text = stringResource(R.string.source_vanished),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+    // The pairing runs on its own after the sign in, so its failure
+    // arrives as an event: the snackbar tells it once, and the status
+    // below keeps the state.
+    val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    LaunchedEffect(automaticPairing) {
+        val failure = automaticPairing as? AutomaticPairingState.Failed
+        if (failure != null) {
+            snackbar.showSnackbar(context.getString(R.string.pairing_failed, failure.reason))
         }
+    }
 
+    Box(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(scrollState),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            if (message != null) {
-                Text(text = message, style = MaterialTheme.typography.bodyMedium)
-            }
-
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            if (maxWidth >= WIDE_WIDTH) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    SourceCard(
-                        apps = sessionApps,
-                        picked = pickedSession,
-                        level = fillLevel,
-                        missingAccess = sessionAccessMissing,
-                        onAllowAccess = onAllowSessionAccess,
-                        restrictedAccessPossible = sessionAccessMayBeRestricted,
-                        onOpenAppInfo = onOpenSessionAppInfo,
-                        onPick = onPickSession,
-                        onPlay = onSessionPlay,
-                        onPause = onSessionPause,
-                        onOpenFinder = onOpenFinder,
-                        onDiscard = onDiscard,
-                        onOpen = onOpenSession,
-                        modifier = Modifier.weight(1f),
-                    )
-                    DestinationCard(
-                        server = discoveredServer,
-                        error = discoveryError,
-                        account = account,
-                        players = players,
-                        live = state.paired,
-                        running = running,
-                        level = fillLevel,
-                        playerPick = playerPick,
-                        signedIn = account.signedIn,
-                        onSignIn = onOpenSignIn,
-                        onSignOut = onSignOut,
-                        onPick = onPickPlayer,
-                        onDiscard = onDiscardPlayer,
-                        onRefresh = onRefreshPlayers,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SourceCard(
-                        apps = sessionApps,
-                        picked = pickedSession,
-                        level = fillLevel,
-                        missingAccess = sessionAccessMissing,
-                        onAllowAccess = onAllowSessionAccess,
-                        restrictedAccessPossible = sessionAccessMayBeRestricted,
-                        onOpenAppInfo = onOpenSessionAppInfo,
-                        onPick = onPickSession,
-                        onPlay = onSessionPlay,
-                        onPause = onSessionPause,
-                        onOpenFinder = onOpenFinder,
-                        onDiscard = onDiscard,
-                        onOpen = onOpenSession,
-                    )
-                    DestinationCard(
-                        server = discoveredServer,
-                        error = discoveryError,
-                        account = account,
-                        players = players,
-                        live = state.paired,
-                        running = running,
-                        level = fillLevel,
-                        playerPick = playerPick,
-                        signedIn = account.signedIn,
-                        onSignIn = onOpenSignIn,
-                        onSignOut = onSignOut,
-                        onPick = onPickPlayer,
-                        onDiscard = onDiscardPlayer,
-                        onRefresh = onRefreshPlayers,
-                    )
-                }
-            }
-        }
-
-        PairingSection(
-            pairingToken = pairingToken,
-            pairingCode = state.pairingCode,
-            serverConnected = state.serverName != null,
-            paired = state.paired,
-            keptPairings = keptPairings,
-            automaticPairing = automaticPairing,
-            signedIn = account.signedIn,
-            administrator = account.administrator,
-            onCopyToken = onCopyToken,
-        )
-
-            StatusSection(
-                state = state,
-                captureStatus = captureStatus,
-                buildLabel = buildLabel,
+            // The bar does not scroll, so the stream control is always in view.
+            TopBar(
+                running = running,
+                connectEnabled = running || (pickedSession != null && playerPick != null),
+                onConnect = onConnect,
+                onDisconnect = onDisconnect,
             )
+
+            // The picked app left its session while the stream runs. The
+            // capture keeps sending silence, so the line says what happened.
+            if (running && pickedSession != null && sessionApps.none { it.packageName == pickedSession }) {
+                Text(
+                    text = stringResource(R.string.source_vanished),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                if (message != null) {
+                    Text(text = message, style = MaterialTheme.typography.bodyMedium)
+                }
+
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    if (maxWidth >= WIDE_WIDTH) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            SourceCard(
+                                apps = sessionApps,
+                                picked = pickedSession,
+                                level = fillLevel,
+                                missingAccess = sessionAccessMissing,
+                                onAllowAccess = onAllowSessionAccess,
+                                restrictedAccessPossible = sessionAccessMayBeRestricted,
+                                onOpenAppInfo = onOpenSessionAppInfo,
+                                onPick = onPickSession,
+                                onPlay = onSessionPlay,
+                                onPause = onSessionPause,
+                                onOpenFinder = onOpenFinder,
+                                onDiscard = onDiscard,
+                                onOpen = onOpenSession,
+                                modifier = Modifier.weight(1f),
+                            )
+                            DestinationCard(
+                                server = discoveredServer,
+                                error = discoveryError,
+                                account = account,
+                                players = players,
+                                live = state.paired,
+                                running = running,
+                                level = fillLevel,
+                                playerPick = playerPick,
+                                signedIn = account.signedIn,
+                                onSignIn = onOpenSignIn,
+                                onSignOut = onSignOut,
+                                onPick = onPickPlayer,
+                                onDiscard = onDiscardPlayer,
+                                onRefresh = onRefreshPlayers,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            SourceCard(
+                                apps = sessionApps,
+                                picked = pickedSession,
+                                level = fillLevel,
+                                missingAccess = sessionAccessMissing,
+                                onAllowAccess = onAllowSessionAccess,
+                                restrictedAccessPossible = sessionAccessMayBeRestricted,
+                                onOpenAppInfo = onOpenSessionAppInfo,
+                                onPick = onPickSession,
+                                onPlay = onSessionPlay,
+                                onPause = onSessionPause,
+                                onOpenFinder = onOpenFinder,
+                                onDiscard = onDiscard,
+                                onOpen = onOpenSession,
+                            )
+                            DestinationCard(
+                                server = discoveredServer,
+                                error = discoveryError,
+                                account = account,
+                                players = players,
+                                live = state.paired,
+                                running = running,
+                                level = fillLevel,
+                                playerPick = playerPick,
+                                signedIn = account.signedIn,
+                                onSignIn = onOpenSignIn,
+                                onSignOut = onSignOut,
+                                onPick = onPickPlayer,
+                                onDiscard = onDiscardPlayer,
+                                onRefresh = onRefreshPlayers,
+                            )
+                        }
+                    }
+                }
+
+                StatusSection(
+                    state = state,
+                    captureStatus = captureStatus,
+                    buildLabel = buildLabel,
+                )
+            }
         }
+
+        // The pairing failure reads at the bottom, over the cards.
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 

@@ -28,21 +28,9 @@
     <!-- The main screen. -->
     <string name="action_connect">Connect</string>
     <string name="action_disconnect">Disconnect</string>
-    <string name="action_copy_token">Copy token</string>
-    <string name="action_copy_done">Token copied</string>
 
-    <!-- The pairing section. -->
-    <string name="title_pairing">Pairing</string>
-    <string name="pairing_explanation">Paste this token into Music Assistant, on the screen where a new input is paired. The token never changes, so the same one works for every server.</string>
-    <string name="pairing_paired">The phone is paired with Music Assistant.</string>
-    <string name="pairing_kept">The phone keeps its pairing with %1\$s. The server uses it again as soon as the phone streams.</string>
-    <string name="pairing_in_progress">The phone is pairing with Music Assistant. This can take a while.</string>
+    <!-- The pairing of the phone with the server. -->
     <string name="pairing_failed">The phone could not pair with Music Assistant: %1$s</string>
-    <string name="pairing_code_instruction">Type this code in Music Assistant.</string>
-    <string name="pairing_code_where">Waiting for Music Assistant. Open the Sendspin provider in Music Assistant, pick this phone, then choose Pairing code.</string>
-    <string name="label_pairing_token">Pairing token</string>
-    <string name="action_show_token">Show the pairing token</string>
-    <string name="action_hide_token">Hide the pairing token</string>
 
     <!-- The Music Assistant account. -->
     <string name="title_sign_in">Sign in to Music Assistant</string>
