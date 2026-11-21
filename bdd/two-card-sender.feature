@@ -20,22 +20,17 @@ Feature: The two-card sender screen
     And the Destination card offers the Music Assistant row
 
   @requires-music-assistant
-  Scenario: Connect enables when both cards carry a pick
-    Given Tidal holds a playing session
-    And "Sign in" is chosen
-    And the sign in form is filled with the Music Assistant account
-    And "Sign in" is pressed
-    And the app is signed into Music Assistant
-    When "Tidal" is picked on the Source card
-    And the first player is picked on the Destination card
-    Then the Connect control is enabled
-
-  @requires-music-assistant
-  Scenario: Connect alone is not enough
+  Scenario: Connect follows the picks
     Given Tidal holds a playing session
     When "Tidal" is picked on the Source card
     Then the Connect control is disabled
     And the Destination card asks for a sign in
+    When "Sign in" is chosen
+    And the sign in form is filled with the Music Assistant account
+    And "Sign in" is pressed
+    And the app is signed into Music Assistant
+    And the first player is picked on the Destination card
+    Then the Connect control is enabled
 
   Scenario: The Source list follows the sessions
     Given the app is open
@@ -51,19 +46,15 @@ Feature: The two-card sender screen
     And Play is pressed on the Tidal row
     Then Tidal plays again
 
-  Scenario: A playing row offers Pause alone
+  Scenario: The transport buttons follow the session state
     Given Tidal holds a playing session
     Then the Tidal row offers Pause
     And the Tidal row offers no Play
     And the Tidal row carries the playing bars
-
-  Scenario: A paused row offers Play alone
-    Given Tidal holds a paused session
+    When Tidal holds a paused session
     Then the Tidal row offers Play
     And the Tidal row offers no Pause
-
-  Scenario: A session that answers no transport carries no button
-    Given Quiet holds a session that answers no transport
+    And Quiet holds a session that answers no transport
     Then the Source card lists Quiet
     And the Quiet row offers no Play
     And the Quiet row offers no Pause
@@ -93,40 +84,39 @@ Feature: The two-card sender screen
     And the notification offers Stop
 
   @requires-music-assistant
-  Scenario: Disconnect stops the stream and keeps the picks
-    Given the stream sends Tidal's audio to the first player
-    When "Disconnect" is pressed
-    Then the stream stops
-    And the capture stops
-    And the destination stops playing the phone
-    And "Tidal" stays picked on the Source card
-    And the first player stays picked on the Destination card
-    And the control reads "Connect"
-
-  @requires-music-assistant
-  Scenario: The source changes while streaming
-    Given the stream sends Tidal's audio to the first player
-    When Mellow starts a media session
-    And "Mellow" is picked on the Source card
-    Then the stream plays Mellow's audio
-
-  @requires-music-assistant
   @followpick
-  Scenario: A paused pick holds while nothing else plays
+  Scenario: The source side of the stream
     Given the stream sends Tidal's audio to the first player
     When Pause is pressed on the Tidal row
     Then "Tidal" stays picked on the Source card
     And the stream keeps sending silence to the first player
     And the control still reads "Disconnect"
+    When Mellow starts a media session
+    And "Mellow" is picked on the Source card
+    Then the stream plays Mellow's audio
+    When Mellow drops its media session
+    Then the Source card no longer lists Mellow
+    And a status line under the bar says the source vanished
+    And the stream keeps sending silence to the first player
+    And the control still reads "Disconnect"
 
   @requires-music-assistant
-  Scenario: The destination changes while streaming
+  Scenario: The destination side of the stream
     Given the stream sends Tidal's audio to the first player
     When the second player is picked on the Destination card
     Then the stream plays to the second player
+    When the second player row is swiped aside
+    Then the Destination card still lists the second player
+    And the second player stays picked on the Destination card
+    And the second player's row carries the live output bars
     When "Disconnect" is pressed
     Then the stream stops
+    And the capture stops
     And the destination stops playing the phone
+    And no destination row carries the live output bars
+    And "Tidal" stays picked on the Source card
+    And the second player stays picked on the Destination card
+    And the control reads "Connect"
 
   @requires-music-assistant
   Scenario: A swipe discards a destination player
@@ -138,29 +128,3 @@ Feature: The two-card sender screen
     Then the Destination card no longer lists the second player
     When the destination refresh is chosen
     Then the Destination card lists the second player again
-
-  @requires-music-assistant
-  Scenario: The picked destination row refuses the swipe
-    Given the stream sends Tidal's audio to the first player
-    When the first player row is swiped aside
-    Then the Destination card still lists the first player
-    And the first player stays picked on the Destination card
-    When "Disconnect" is pressed
-    Then the stream stops
-
-  @requires-music-assistant
-  Scenario: The live destination row carries the bars
-    Given the stream sends Tidal's audio to the first player
-    Then the first player's row carries the live output bars
-    When "Disconnect" is pressed
-    Then no destination row carries the live output bars
-    And the first player stays picked on the Destination card
-
-  @requires-music-assistant
-  Scenario: The picked source vanishes mid-stream
-    Given the stream sends Tidal's audio to the first player
-    When Tidal drops its media session
-    Then the Source card no longer lists Tidal
-    And a status line under the bar says the source vanished
-    And the stream keeps sending silence to the first player
-    And the control still reads "Disconnect"

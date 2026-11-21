@@ -1,5 +1,6 @@
 package app.gubbins.spindroid.bdd.steps
 
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
@@ -88,10 +89,10 @@ class TwoCardSteps {
         waitForRow("Tidal")
     }
 
-    @Given("Tidal holds a paused session")
-    fun tidalHoldsAPausedSession() {
-        TestSession.start(title("Tidal"), playing = false)
-        waitForRow("Tidal")
+    @Given("{word} holds a paused session")
+    fun appHoldsAPausedSession(app: String) {
+        TestSession.start(title(app), playing = false)
+        waitForRow(app)
     }
 
     @Given("{word} holds a session that answers no transport")
@@ -351,6 +352,22 @@ class TwoCardSteps {
         awaitUntil(AWAIT_OPEN_MILLIS) { device().currentPackageName == packageName }
     }
 
+    @When("{word} is sent to the background")
+    fun theAppIsSentToTheBackground(app: String) {
+        val packageName = realPackage
+            ?: error("$app was not offered from this phone, so it cannot leave the front.")
+        // The home key sends the app behind. The sender comes back the
+        // way a person brings it back, so the next step can drive it.
+        device().pressHome()
+        awaitUntil(AWAIT_OPEN_MILLIS) { device().currentPackageName != packageName }
+        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            ?: error("The sender has no launch intent.")
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        context.startActivity(launch)
+        awaitUntil(AWAIT_OPEN_MILLIS) { device().currentPackageName == context.packageName }
+        composeRule.waitForIdle()
+    }
+
     @Then("the rows read {string}")
     fun theRowsRead(theRows: String) {
         composeRule.waitForIdle()
@@ -361,7 +378,7 @@ class TwoCardSteps {
             val y = composeRule.onNode(row(name)).fetchSemanticsNode()
                 .positionInRoot.y
             check(y > previous) {
-                "The row of ${'$'}name did not read after the one above: y=${'$'}y of ${'$'}{theRows}."
+                "The row of $name did not read after the one above: y=$y of $theRows."
             }
             previous = y
         }
@@ -419,11 +436,18 @@ class TwoCardSteps {
         composeRule.onNode(row(label)).performScrollTo().assertIsDisplayed()
     }
 
-    @Then("the Destination card still lists the first player")
-    fun theDestinationCardStillListsTheFirstPlayer() {
-        val label = ServerPlayers.firstLabel()
+    @Then("the Destination card still lists the {word} player")
+    fun theDestinationCardStillListsThePlayer(player: String) {
+        val label = playerLabel(player)
         composeRule.waitForIdle()
         composeRule.onNode(row(label)).performScrollTo().assertIsDisplayed()
+    }
+
+    /** The label of the player that the step names, first or second. */
+    private fun playerLabel(player: String): String = when (player) {
+        "first" -> ServerPlayers.firstLabel()
+        "second" -> ServerPlayers.secondLabel()
+        else -> error("The step names the first or the second player, not $player.")
     }
 
     @Then("the finder offers {string} again")
@@ -706,15 +730,15 @@ class TwoCardSteps {
         awaitUntil(AWAIT_STOP_MILLIS) { !CaptureStatusHolder.state.value.running }
     }
 
-    @Then("the first player stays picked on the Destination card")
-    fun theFirstPlayerStaysPicked() {
+    @Then("the {word} player stays picked on the Destination card")
+    fun thePlayerStaysPicked(player: String) {
         // The row is its own selection control, the way a source row is,
         // so its own state says whether the pick holds it.
-        val label = ServerPlayers.firstLabel()
+        val label = playerLabel(player)
         val node = composeRule.onNode(row(label)).fetchSemanticsNode()
         val selected = node.config.getOrElse(SemanticsProperties.Selected) { false }
         check(selected) {
-            "The first player is not picked."
+            "The $player player is not picked."
         }
     }
 
@@ -727,13 +751,19 @@ class TwoCardSteps {
         ).assertIsDisplayed()
     }
 
-    @Then("the first player's row carries the live output bars")
-    fun theFirstPlayerCarriesTheLiveOutputBars() {
-        val label = ServerPlayers.firstLabel()
-        composeRule.waitForIdle()
-        composeRule.onNode(
-            row(label) and hasContentDescription(context.getString(R.string.bars_live_output)),
-        ).performScrollTo().assertIsDisplayed()
+    @Then("the {word} player's row carries the live output bars")
+    fun thePlayerCarriesTheLiveOutputBars(player: String) {
+        val label = playerLabel(player)
+        // The bars name the player that the server confirms, so a fresh
+        // pick clears them and the confirmation lands on the router's own
+        // clock. The step waits for the bars the way a person would wait
+        // for the sound to move.
+        val bars = row(label) and
+            hasContentDescription(context.getString(R.string.bars_live_output))
+        composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(bars).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNode(bars).performScrollTo().assertIsDisplayed()
     }
 
     @Then("no destination row carries the live output bars")

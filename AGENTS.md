@@ -46,6 +46,9 @@ it uninstalls the app when it ends, and `am instrument` exits zero even when
 scenarios fail. `runBdd` parses the output and fails the build on failure.
 
 - `ANDROID_SERIAL=<serial>` picks the device when several are connected.
+- A plain `./gradlew :app:runBdd` with no `-Pbdd.tags` runs every scenario in
+  one pass. Use that when a Music Assistant and an account are available; the
+  two tag runs below split the same suite for machines without them.
 - `-Pbdd.tags="not @requires-music-assistant"` skips the scenarios that need
   a Music Assistant on the LAN. Cucumber reports no tests then, which passes.
 - Scenarios that sign in need an account. `runBdd` reads it from

@@ -145,8 +145,10 @@ dependencies {
  *
  * Set `ANDROID_SERIAL` to choose a device when more than one is connected.
  *
- * Pass `-Pbdd.tags=<filter>` to run a part of the suite. The scenarios that
- * need a Music Assistant are tagged `@requires-music-assistant`, so
+ * Pass `-Pbdd.tags=<filter>` to run a part of the suite. A plain run with no
+ * filter runs every scenario in one pass, so prefer that when a Music
+ * Assistant and an account are on hand. The scenarios that need a Music
+ * Assistant are tagged `@requires-music-assistant`, so
  * `-Pbdd.tags="not @requires-music-assistant"` runs the suite on a network
  * without one. Cucumber reports no tests in that case, which passes.
  *

@@ -6,18 +6,12 @@ Feature: SendSpin Source Role
   and start sending audio captured from the Android device.
 
   @requires-music-assistant
-  Scenario: Onboarding in the presence of Music Assistant
+  Scenario: Onboarding into the sign in form
     Given a fresh install
     And a Music Assistant is present on the network
     When the app opens
     Then the Music Assistant name is shown
     And the Destination card offers the Music Assistant row
-
-  @requires-music-assistant
-  Scenario: Signing into Music Assistant
-    Given a fresh install
-    And a Music Assistant is present on the network
-    When the app opens
     And "Sign in" is chosen
     Then a sign in page is shown
     And the page has a sign in form

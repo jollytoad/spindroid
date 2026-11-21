@@ -10,14 +10,6 @@ Feature: Add sources to the card
   front on its own.
 
   @discovery
-  Scenario: The finder lists the installed media apps
-    Given the app is open
-    And the finder offers "Mellow" and "Radio" as installed media apps
-    When the finder is chosen
-    Then the Source card lists Mellow
-    And the Source card lists Radio
-
-  @discovery
   Scenario: Discovered rows read among the sessions, alphabetically
     Given Tidal holds a playing session
     And the finder offers "Radio" and "Mellow" as installed media apps
@@ -62,18 +54,13 @@ Feature: Add sources to the card
     And the finder offers "Radio" again
 
   @discovery
-  Scenario: A row tap opens the app
+  Scenario: A row opens its app, from its face and from its icon
     Given the phone holds no other playing app
     And the finder offers Spotify from this phone
     When the finder is chosen
     And "Spotify" is picked on the Source card
     Then Spotify opens in the foreground
-
-  @discovery
-  Scenario: The row icon opens the app
-    Given the phone holds no other playing app
-    And the finder offers Spotify from this phone
-    When the finder is chosen
+    When Spotify is sent to the background
     And the Spotify icon is chosen
     Then Spotify opens in the foreground
 
