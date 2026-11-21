@@ -66,7 +66,7 @@ Feature: Add sources to the card
 
   @requires-music-assistant
   @discovery
-  Scenario: Connect enables when the pick is a discovered app
+  Scenario: A discovered pick arms the stream
     Given "Sign in" is chosen
     And the sign in form is filled with the Music Assistant account
     And "Sign in" is pressed
@@ -75,4 +75,6 @@ Feature: Add sources to the card
     When the finder is chosen
     And "Radio" is picked on the Source card
     And the first player is picked on the Destination card
-    Then the Connect control is enabled
+    Then the media projection consent dialog is presented
+    When "Start now" is chosen on the consent dialog
+    And the stream keeps sending silence to the first player

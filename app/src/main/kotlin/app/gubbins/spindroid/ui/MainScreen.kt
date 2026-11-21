@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -36,9 +35,10 @@ import app.gubbins.spindroid.mass.MassPlayerState
  *
  * Two cards carry the routing: the Source card lists the apps that hold a
  * media session, and the Destination card lists the players that can play
- * the phone. The Connect control in the bar streams the picked source to
- * the picked destination. The status stays below, because it serves the
- * diagnosis.
+ * the phone. The pick that lands second starts the stream, so the screen
+ * needs no start control of its own; the stop lives on the destination
+ * row that carries the stream. The status stays below, because it serves
+ * the diagnosis.
  */
 @Composable
 fun MainScreen(
@@ -66,8 +66,7 @@ fun MainScreen(
     onPickPlayer: (String) -> Unit,
     onDiscardPlayer: (String) -> Unit,
     onRefreshPlayers: () -> Unit,
-    onConnect: () -> Unit,
-    onDisconnect: () -> Unit,
+    onStopStream: () -> Unit,
     onOpenFinder: () -> Unit,
     onDiscard: (String) -> Unit,
     onOpenSignIn: () -> Unit,
@@ -99,12 +98,12 @@ fun MainScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // The bar does not scroll, so the stream control is always in view.
-            TopBar(
-                running = running,
-                connectEnabled = running || (pickedSession != null && playerPick != null),
-                onConnect = onConnect,
-                onDisconnect = onDisconnect,
+            // The title stays above the scroll, so the cards carry every
+            // control of the stream: the second pick starts it, and the
+            // stop on the picked destination row ends it.
+            Text(
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.headlineMedium,
             )
 
             // The picked app left its session while the stream runs. The
@@ -163,6 +162,7 @@ fun MainScreen(
                                 onPick = onPickPlayer,
                                 onDiscard = onDiscardPlayer,
                                 onRefresh = onRefreshPlayers,
+                                onStop = onStopStream,
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -198,6 +198,7 @@ fun MainScreen(
                                 onPick = onPickPlayer,
                                 onDiscard = onDiscardPlayer,
                                 onRefresh = onRefreshPlayers,
+                                onStop = onStopStream,
                             )
                         }
                     }
@@ -216,35 +217,6 @@ fun MainScreen(
             hostState = snackbar,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
-    }
-}
-
-/** The bar that names the app and holds the stream control. */
-@Composable
-private fun TopBar(
-    running: Boolean,
-    connectEnabled: Boolean,
-    onConnect: () -> Unit,
-    onDisconnect: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stringResource(R.string.app_name),
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.weight(1f),
-        )
-        if (running) {
-            Button(onClick = onDisconnect, enabled = true) {
-                Text(stringResource(R.string.action_disconnect))
-            }
-        } else {
-            Button(onClick = onConnect, enabled = connectEnabled) {
-                Text(stringResource(R.string.action_connect))
-            }
-        }
     }
 }
 

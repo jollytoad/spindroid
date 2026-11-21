@@ -208,21 +208,6 @@ class TwoCardSteps {
         }
     }
 
-    @Then("the Connect control is disabled")
-    fun theConnectControlIsDisabled() {
-        control().assertIsNotEnabled()
-    }
-
-    @Then("the Connect control is enabled")
-    fun theConnectControlIsEnabled() {
-        control().assertIsEnabled()
-    }
-
-    @Then("the control reads {string}")
-    fun theControlReads(text: String) {
-        composeRule.onNodeWithText(text).assertIsDisplayed()
-    }
-
     @Then("the Destination card offers the Music Assistant row")
     fun theDestinationCardOffersTheMusicAssistantRow() {
         // The search resolves the server on its own thread, so the row
@@ -528,11 +513,6 @@ class TwoCardSteps {
     /** The title that the test session carries, as the row shows it. */
     private fun title(app: String) = "$app — the BDD session"
 
-    /** The stream control of the bar. */
-    private fun control() = composeRule.onNodeWithText(
-        context.getString(R.string.action_connect),
-    )
-
     /** Serves the diagnosis of a wait that never ended. */
     private fun dumpScreen(tag: String) {
         val file = java.io.File(
@@ -596,9 +576,10 @@ class TwoCardSteps {
         PairingSteps().buttonIsPressed("Sign in")
         theAppIsSignedIn()
         appIsPickedOnTheSourceCard("Tidal")
+        // The destination pick is the second of the two picks, so it
+        // starts the stream on its own: the consent dialog follows the
+        // tap, the way it follows a start control.
         firstPlayerIsPicked()
-        // The bar does not scroll, so the control is in view for the press.
-        composeRule.onNodeWithText(context.getString(R.string.action_connect)).performClick()
         Consent.waitPresented()
         Consent.choose("Start now")
         theStreamSendsToTheFirstPlayerThen()
@@ -608,13 +589,13 @@ class TwoCardSteps {
     private fun theStreamSendsToTheFirstPlayerThen() {
         try {
             composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
-                composeRule.onAllNodesWithText(
-                    context.getString(R.string.action_disconnect),
+                composeRule.onAllNodes(
+                    hasContentDescription(context.getString(R.string.stop_stream)),
                 ).fetchSemanticsNodes().isNotEmpty()
             }
         } catch (exception: androidx.compose.ui.test.ComposeTimeoutException) {
             dumpScreen("stream")
-            error("The control never read Disconnect. A screenshot is in /data/local/tmp.")
+            error("The stop never showed on the picked row. A screenshot is in the app cache.")
         }
         awaitUntil(AWAIT_STREAM_MILLIS) {
             CaptureStatusHolder.state.value.running &&
@@ -790,9 +771,36 @@ class TwoCardSteps {
         check(SessionStateHolder.running.value) { "The service stopped." }
     }
 
-    @And("the control still reads {string}")
-    fun theControlStillReads(text: String) {
-        theControlReads(text)
+    @Then("the {word} player's row offers the stop")
+    fun thePlayerRowOffersTheStop(player: String) {
+        val label = playerLabel(player)
+        composeRule.waitForIdle()
+        composeRule.onNode(
+            hasContentDescription(context.getString(R.string.stop_stream)) and
+                hasAnyAncestor(row(label)),
+        ).performScrollTo().assertIsDisplayed()
+    }
+
+    @When("the stop on the {word} player's row is pressed")
+    fun theStopOnThePlayerRowIsPressed(player: String) {
+        val label = playerLabel(player)
+        composeRule.waitForIdle()
+        composeRule.onNode(
+            hasContentDescription(context.getString(R.string.stop_stream)) and
+                hasAnyAncestor(row(label)),
+        ).performScrollTo().performClick()
+        composeRule.waitForIdle()
+    }
+
+    @Then("no destination row offers the stop")
+    fun noDestinationRowOffersTheStop() {
+        composeRule.waitForIdle()
+        val stops = composeRule.onAllNodes(
+            hasContentDescription(context.getString(R.string.stop_stream)),
+        ).fetchSemanticsNodes()
+        check(stops.isEmpty()) {
+            "${stops.size} rows still offer the stop."
+        }
     }
 
     private companion object {

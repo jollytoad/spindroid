@@ -14,7 +14,7 @@
     <string name="action_pause">Pause</string>
     <string name="bars_playing">Playing now</string>
     <string name="bars_live_output">Live output</string>
-    <string name="source_vanished">The app that played is gone. The stream keeps sending silence until you disconnect.</string>
+    <string name="source_vanished">The app that played is gone. The stream keeps sending silence until you stop it.</string>
     <string name="source_gone">The app is gone, so the stream keeps its source. Pick again.</string>
     <string name="open_app">Open %1$s</string>
 
@@ -25,9 +25,10 @@
     <string name="mass_row_title">Music Assistant</string>
     <string name="server_searching">Looking for Music Assistant on the local network…</string>
 
-    <!-- The main screen. -->
-    <string name="action_connect">Connect</string>
-    <string name="action_disconnect">Disconnect</string>
+    <!-- The main screen. The second of the two picks starts the
+         stream, so the screen needs no start control; the stop lives
+         on the destination row that carries the stream. -->
+    <string name="stop_stream">Stop the stream</string>
 
     <!-- The pairing of the phone with the server. -->
     <string name="pairing_failed">The phone could not pair with Music Assistant: %1$s</string>
@@ -47,7 +48,7 @@
     <string name="players_loading">Reading the players from the server…</string>
     <string name="players_none">The server has no player that can play sound.</string>
     <string name="players_not_available">Not available</string>
-    <string name="players_not_live">The phone is not connected to the server, so it has no sound to send yet. Connect it first.</string>
+    <string name="players_not_live">The phone is not connected to the server, so it has no sound to send yet. Pick a source and a player, and the stream starts on its own.</string>
     <string name="players_send">send the audio of the phone to this player</string>
     <string name="players_refresh">Read the player list again</string>
     <string name="action_refresh">Refresh</string>

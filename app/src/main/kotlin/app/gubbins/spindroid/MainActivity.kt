@@ -175,7 +175,7 @@ class MainActivity : ComponentActivity() {
             }
 
             // The pick of the player is a choice of the screen, not of the
-            // server. The server learns it when the Connect control starts.
+            // server. The server learns it when the pick starts the stream.
             var playerPick by rememberSaveable { mutableStateOf<String?>(null) }
 
             // The sign in form lives on a page of its own. The page closes
@@ -228,7 +228,10 @@ class MainActivity : ComponentActivity() {
                     sessionAccessMissing = sessionAccessMissing,
                     pickedSession = pickedSession,
                     playerPick = playerPick,
-                    onPickSession = { packageName -> pickSource(packageName) },
+                    onPickSession = { packageName ->
+                        pickSource(packageName)
+                        startStreamIfReady(packageName, playerPick)
+                    },
                     onAllowSessionAccess = { openNotificationAccess() },
                     sessionAccessMayBeRestricted = accessMayBeRestricted,
                     onOpenSessionAppInfo = { openAppInfo() },
@@ -240,17 +243,21 @@ class MainActivity : ComponentActivity() {
                     onPickPlayer = { playerId ->
                         playerPick = playerId
                         players.startRouting(playerId)
+                        startStreamIfReady(pickedSession, playerId)
                     },
                     onDiscardPlayer = { playerId -> players.discard(playerId) },
                     onRefreshPlayers = { players.refreshAll() },
 
-                    onConnect = { connect() },
-                    onDisconnect = { disconnect() },
+                    onStopStream = { stopStream() },
                     onOpenSignIn = { signInPage = true },
                     onSignOut = {
                         pairing.reset()
                         accounts.signOut()
                         playerPick = null
+                        // The stream has no destination any more, so it
+                        // ends here rather than run on with no player to
+                        // reach.
+                        stopStream()
                     },
                 )
             }
@@ -360,6 +367,25 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    /**
+     * Starts the stream when the picks are whole.
+     *
+     * The two picks carry the whole intent — this app, to that player —
+     * so the pick that lands second starts the stream on its own, and
+     * the permission and consent dialogs follow the tap that caused
+     * them. The call comes from the tap handlers alone, never from the
+     * state: a focus move or a restored screen must not raise the
+     * consent dialog without a hand behind it.
+     *
+     * @param sourcePick the app the capture should follow
+     * @param destinationPick the player that should play the phone
+     */
+    private fun startStreamIfReady(sourcePick: String?, destinationPick: String?) {
+        if (SessionStateHolder.running.value) return
+        if (sourcePick == null || destinationPick == null) return
+        connect()
+    }
+
     private fun connect() {
         pendingStep = ::askForRecordPermission
         askFor(Manifest.permission.POST_NOTIFICATIONS)
@@ -402,9 +428,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Stops the service. */
-    private fun disconnect() {
+    private fun stopStream() {
         // The player that plays the phone goes quiet on its own source, so
-        // the stream does not carry on there after the phone disconnects.
+        // the stream does not carry on there after the phone stops.
         players.stopRouting()
         stopService(Intent(this, SpindroidService::class.java))
     }

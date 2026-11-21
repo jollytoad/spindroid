@@ -240,8 +240,8 @@ class MassPlayerManager(
             return
         }
         if (!SessionStateHolder.running.value) {
-            // The server cannot reach a phone that does not listen, and the
-            // Connect control puts the listener up.
+            // The server cannot reach a phone that does not listen, and
+            // the pick that lands second puts the listener up.
             publish(mutableState.value.copy(error = REASON_NOT_LIVE))
             return
         }

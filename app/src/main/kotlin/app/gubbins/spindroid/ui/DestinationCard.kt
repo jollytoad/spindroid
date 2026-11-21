@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,11 +45,12 @@ import app.gubbins.spindroid.mass.playerIconOf
  * once the phone found one or signed in to one: the row names the
  * server, and its button carries the way in or the way out. After the
  * sign in, the card also lists the players, and the row pick sends the
- * audio of the phone to the one player it names. A swipe aside drops a
- * row from the list until the refresh control beside the title runs,
- * which reads the list again and forgets every drop. The row that
- * carries the pick refuses the swipe, the way a session row does on
- * the Source card.
+ * audio of the phone to the one player it names; the pick that lands
+ * last starts the stream on its own. While the stream runs, the picked
+ * row carries the stop for it. A swipe aside drops a row from the list
+ * until the refresh control beside the title runs, which reads the
+ * list again and forgets every drop. The row that carries the pick
+ * refuses the swipe, the way a session row does on the Source card.
  */
 @Composable
 internal fun DestinationCard(
@@ -66,6 +68,7 @@ internal fun DestinationCard(
     onPick: (String) -> Unit,
     onDiscard: (String) -> Unit,
     onRefresh: () -> Unit,
+    onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
@@ -129,7 +132,10 @@ internal fun DestinationCard(
                                     // goes to, so it refuses the swipe, the
                                     // way a session row does on the Source
                                     // card: the row that carries the stream
-                                    // cannot be dropped.
+                                    // cannot be dropped. While the stream
+                                    // runs, the row also carries the stop
+                                    // for it, so the off switch sits on the
+                                    // row it turns off.
                                     PlayerRow(
                                         player = player,
                                         names = players.allPlayers.associate { it.playerId to it.label },
@@ -139,6 +145,7 @@ internal fun DestinationCard(
                                         busy = players.choosing == player.playerId,
                                         canPick = player.available,
                                         onPick = { onPick(player.playerId) },
+                                        onStop = if (running) onStop else null,
                                     )
                                 } else {
                                     SwipeAsideRow(
@@ -153,6 +160,7 @@ internal fun DestinationCard(
                                             busy = players.choosing == player.playerId,
                                             canPick = player.available,
                                             onPick = { onPick(player.playerId) },
+                                            onStop = null,
                                         )
                                     }
                                 }
@@ -253,8 +261,9 @@ private fun ServerRow(
  * the bars mark the player that the stream plays on now, and the glyph
  * names the kind of the player the way the server sees it. Tapping
  * anywhere on the row sends the audio of the phone to this player.
- * The row serves as the face of the swipe box on the rows that a
- * swipe can drop.
+ * While the stream runs, the picked row carries the stop for it at
+ * its trailing edge. The row serves as the face of the swipe box on
+ * the rows that a swipe can drop.
  */
 @Composable
 private fun PlayerRow(
@@ -266,6 +275,7 @@ private fun PlayerRow(
     busy: Boolean,
     canPick: Boolean,
     onPick: () -> Unit,
+    onStop: (() -> Unit)?,
 ) {
     Row(
         modifier = Modifier
@@ -316,6 +326,14 @@ private fun PlayerRow(
             }
             noteOf(player, names)?.let { note ->
                 Text(text = note, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        onStop?.let { stop ->
+            IconButton(onClick = stop) {
+                Icon(
+                    imageVector = Icons.Rounded.Stop,
+                    contentDescription = stringResource(R.string.stop_stream),
+                )
             }
         }
     }
