@@ -222,11 +222,21 @@ class TwoCardSteps {
         composeRule.onNodeWithText(text).assertIsDisplayed()
     }
 
-    @Then("the Destination card presents connection options:")
-    fun theDestinationCardPresentsConnectionOptions(options: io.cucumber.datatable.DataTable) {
-        options.asLists().forEach { line ->
-            composeRule.onNodeWithText(line[0]).assertIsDisplayed()
+    @Then("the Destination card offers the Music Assistant row")
+    fun theDestinationCardOffersTheMusicAssistantRow() {
+        // The search resolves the server on its own thread, so the row
+        // can arrive a moment behind the open of the app.
+        composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
+            composeRule.onAllNodesWithText(
+                context.getString(R.string.mass_row_title),
+            ).fetchSemanticsNodes().isNotEmpty()
         }
+        composeRule.onNodeWithText(
+            context.getString(R.string.mass_row_title),
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.action_sign_in),
+        ).assertIsDisplayed()
     }
 
     @Then("the Source card says that no app holds a media session")
@@ -236,10 +246,13 @@ class TwoCardSteps {
         ).assertIsDisplayed()
     }
 
-    @Then("the Destination card asks for a player pick")
-    fun theDestinationCardAsksForAPick() {
+    @Then("the Destination card asks for a sign in")
+    fun theDestinationCardAsksForASignIn() {
         composeRule.onNodeWithText(
-            context.getString(R.string.players_sign_in_first),
+            context.getString(R.string.mass_row_title),
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.action_sign_in),
         ).assertIsDisplayed()
     }
 
@@ -527,17 +540,20 @@ class TwoCardSteps {
     fun theStreamSendsToTheFirstPlayer() {
         TestSession.start(title("Tidal"), playing = true)
         waitForRow("Tidal")
-        // The search finds the server a moment behind, so the option waits.
+        // The search finds the server a moment behind, so the row waits.
         try {
             composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
-                composeRule.onAllNodesWithText("Sign into Music Assistant")
-                    .fetchSemanticsNodes().isNotEmpty()
+                composeRule.onAllNodesWithText(
+                    context.getString(R.string.action_sign_in),
+                ).fetchSemanticsNodes().isNotEmpty()
             }
         } catch (exception: androidx.compose.ui.test.ComposeTimeoutException) {
             dumpScreen("sign-in")
-            error("The sign in option never showed. A screenshot is in the app cache, sign-in.png.")
+            error("The sign in row never showed. A screenshot is in the app cache, sign-in.png.")
         }
-        composeRule.onNodeWithText("Sign into Music Assistant").performClick()
+        composeRule.onNodeWithText(
+            context.getString(R.string.action_sign_in),
+        ).performClick()
         PairingSteps().theSignInFormIsFilledWithTheAccount()
         PairingSteps().buttonIsPressed("Sign in")
         theAppIsSignedIn()

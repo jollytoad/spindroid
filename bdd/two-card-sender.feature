@@ -16,14 +16,12 @@ Feature: The two-card sender screen
     When the app opens
     Then the Connect control is disabled
     And the Source card says that no app holds a media session
-    And the Destination card presents connection options:
-      | Sign into Music Assistant |
-      | Pair with Music Assistant |
+    And the Destination card offers the Music Assistant row
 
   @requires-music-assistant
   Scenario: Connect enables when both cards carry a pick
     Given Tidal holds a playing session
-    And "Sign into Music Assistant" is chosen
+    And "Sign in" is chosen
     And the sign in form is filled with the Music Assistant account
     And "Sign in" is pressed
     And the app is signed into Music Assistant
@@ -36,7 +34,7 @@ Feature: The two-card sender screen
     Given Tidal holds a playing session
     When "Tidal" is picked on the Source card
     Then the Connect control is disabled
-    And the Destination card asks for a player pick
+    And the Destination card asks for a sign in
 
   Scenario: The Source list follows the sessions
     Given the app is open
@@ -80,7 +78,7 @@ Feature: The two-card sender screen
   @streaming
   Scenario: Connect starts the stream
     Given Tidal holds a playing session
-    And "Sign into Music Assistant" is chosen
+    And "Sign in" is chosen
     And the sign in form is filled with the Music Assistant account
     And "Sign in" is pressed
     And the app is signed into Music Assistant
@@ -131,7 +129,7 @@ Feature: The two-card sender screen
 
   @requires-music-assistant
   Scenario: A swipe discards a destination player
-    Given "Sign into Music Assistant" is chosen
+    Given "Sign in" is chosen
     And the sign in form is filled with the Music Assistant account
     And "Sign in" is pressed
     And the app is signed into Music Assistant

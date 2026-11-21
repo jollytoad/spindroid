@@ -27,12 +27,11 @@ import app.gubbins.sendspin.session.SourceSessionState
 import app.gubbins.spindroid.R
 import app.gubbins.spindroid.capture.CaptureStatus
 import app.gubbins.spindroid.mass.AutomaticPairingState
-import app.gubbins.spindroid.mass.MassAccountState
 
 /**
- * The sections below the two cards: the pairing, the account, and the
- * status. They serve the setup and the diagnosis, so they sit under
- * the routing that the cards carry.
+ * The sections below the two cards: the pairing and the status. They
+ * serve the setup and the diagnosis, so they sit under the routing
+ * that the cards carry.
  */
 
 /**
@@ -144,55 +143,6 @@ internal fun PairingSection(
                 )
                 OutlinedButton(onClick = onCopyToken) {
                     Text(stringResource(R.string.action_copy_token))
-                }
-            }
-        }
-    }
-}
-
-/**
- * The state of the account on the main page.
- *
- * The form itself lives on its own page, because the user needs it only
- * once. This section tells the state, offers the way to the page, and
- * offers the sign out.
- */
-@Composable
-internal fun AccountSection(
-    account: MassAccountState,
-    onOpenSignIn: () -> Unit,
-    onSignOut: () -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.title_account),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            if (account.signedIn) {
-                Text(
-                    text = stringResource(
-                        R.string.account_signed_in,
-                        account.displayName ?: account.username.orEmpty(),
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                OutlinedButton(onClick = onSignOut) {
-                    Text(stringResource(R.string.action_sign_out))
-                }
-            } else {
-                Text(
-                    text = stringResource(R.string.account_explanation),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                OutlinedButton(onClick = onOpenSignIn) {
-                    Text(stringResource(R.string.action_sign_in))
-                }
-                account.error?.let { error ->
-                    Text(text = error, style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }

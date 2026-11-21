@@ -1,11 +1,14 @@
 package app.gubbins.spindroid.bdd.steps
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnySibling
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.test.platform.app.InstrumentationRegistry
+import app.gubbins.spindroid.R
 import app.gubbins.spindroid.bdd.support.ComposeRuleHolder
 import app.gubbins.spindroid.bdd.support.RealServer
-import io.cucumber.datatable.DataTable
 import io.cucumber.java.en.And
 import io.cucumber.java.en.Given
 import io.cucumber.java.en.Then
@@ -20,6 +23,7 @@ import io.cucumber.java.en.When
  */
 class OnboardingSteps {
     private val composeRule get() = ComposeRuleHolder.current.composeRule
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Given("a fresh install")
     fun aFreshInstall() {
@@ -41,17 +45,16 @@ class OnboardingSteps {
     @Then("the Music Assistant name is shown")
     fun theMusicAssistantNameIsShown() {
         val name = server().name
+        // The name is the subtitle of the server row, but other texts
+        // say the name too: the pairings the phone keeps, and the
+        // status panel. The title beside the subtitle picks the row.
+        val subtitle = hasText(name) and hasAnySibling(
+            hasText(context.getString(R.string.mass_row_title)),
+        )
         composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
-            composeRule.onAllNodesWithText(name).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodes(subtitle).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText(name).assertIsDisplayed()
-    }
-
-    @And("connection options are presented:")
-    fun connectionOptionsArePresented(options: DataTable) {
-        options.asLists().forEach { row ->
-            composeRule.onNodeWithText(row[0]).assertIsDisplayed()
-        }
+        composeRule.onNode(subtitle).assertIsDisplayed()
     }
 
     private fun server() = RealServer.found

@@ -12,15 +12,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.gubbins.sendspin.psk.PskRecord
@@ -32,7 +25,6 @@ import app.gubbins.spindroid.mass.AutomaticPairingState
 import app.gubbins.spindroid.mass.DiscoveredServer
 import app.gubbins.spindroid.mass.MassAccountState
 import app.gubbins.spindroid.mass.MassPlayerState
-import kotlinx.coroutines.launch
 
 /**
  * The screen of the app.
@@ -80,17 +72,11 @@ fun MainScreen(
     onSignOut: () -> Unit,
 ) {
     val scrollState = rememberScrollState()
-    val scope = rememberCoroutineScope()
 
     // The loudness of the capture, as the share of a picked row that
     // the fill covers. Both cards show it on the row that carries the
     // stream, so the highlight moves with the sound.
     val fillLevel = fillLevelOf(captureStatus.peak)
-
-    // The place of the pairing section that the onboarding option points
-    // at. The scroll offset is in the same space as the position in the
-    // column, so the button reaches the section without knowing its height.
-    var pairingTop by remember { mutableIntStateOf(0) }
 
     Column(
         modifier = Modifier
@@ -158,7 +144,7 @@ fun MainScreen(
                         playerPick = playerPick,
                         signedIn = account.signedIn,
                         onSignIn = onOpenSignIn,
-                        onPair = { scope.launch { scrollState.animateScrollTo(pairingTop) } },
+                        onSignOut = onSignOut,
                         onPick = onPickPlayer,
                         onDiscard = onDiscardPlayer,
                         onRefresh = onRefreshPlayers,
@@ -193,7 +179,7 @@ fun MainScreen(
                         playerPick = playerPick,
                         signedIn = account.signedIn,
                         onSignIn = onOpenSignIn,
-                        onPair = { scope.launch { scrollState.animateScrollTo(pairingTop) } },
+                        onSignOut = onSignOut,
                         onPick = onPickPlayer,
                         onDiscard = onDiscardPlayer,
                         onRefresh = onRefreshPlayers,
@@ -203,9 +189,6 @@ fun MainScreen(
         }
 
         PairingSection(
-            modifier = Modifier.onGloballyPositioned {
-                pairingTop = it.positionInParent().y.toInt()
-            },
             pairingToken = pairingToken,
             pairingCode = state.pairingCode,
             serverConnected = state.serverName != null,
@@ -215,12 +198,6 @@ fun MainScreen(
             signedIn = account.signedIn,
             administrator = account.administrator,
             onCopyToken = onCopyToken,
-        )
-
-        AccountSection(
-            account = account,
-            onOpenSignIn = onOpenSignIn,
-            onSignOut = onSignOut,
         )
 
             StatusSection(

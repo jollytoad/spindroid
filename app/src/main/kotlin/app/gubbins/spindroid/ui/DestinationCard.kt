@@ -1,5 +1,6 @@
 package app.gubbins.spindroid.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -22,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -38,13 +40,15 @@ import app.gubbins.spindroid.mass.playerIconOf
 /**
  * The card that holds the destination.
  *
- * Before the account exists, the card holds the Music Assistant that the
- * phone found and the two ways to connect. After it, the card lists the
- * players, and the row pick sends the audio of the phone to the one
- * player it names. A swipe aside drops a row from the list until the
- * refresh control beside the title runs, which reads the list again and
- * forgets every drop. The row that carries the pick refuses the swipe,
- * the way a session row does on the Source card.
+ * The card always opens with the row of the Music Assistant server,
+ * once the phone found one or signed in to one: the row names the
+ * server, and its button carries the way in or the way out. After the
+ * sign in, the card also lists the players, and the row pick sends the
+ * audio of the phone to the one player it names. A swipe aside drops a
+ * row from the list until the refresh control beside the title runs,
+ * which reads the list again and forgets every drop. The row that
+ * carries the pick refuses the swipe, the way a session row does on
+ * the Source card.
  */
 @Composable
 internal fun DestinationCard(
@@ -58,7 +62,7 @@ internal fun DestinationCard(
     playerPick: String?,
     signedIn: Boolean,
     onSignIn: () -> Unit,
-    onPair: () -> Unit,
+    onSignOut: () -> Unit,
     onPick: (String) -> Unit,
     onDiscard: (String) -> Unit,
     onRefresh: () -> Unit,
@@ -89,6 +93,15 @@ internal fun DestinationCard(
             }
             when {
                 signedIn -> {
+                    // The row stays above the players, so the card keeps
+                    // naming the server the list came from, and keeps the
+                    // way out in reach.
+                    ServerRow(
+                        subtitle = server?.name ?: account.serverUrl,
+                        signedIn = true,
+                        onSignIn = onSignIn,
+                        onSignOut = onSignOut,
+                    )
                     if (!live) {
                         Text(
                             text = stringResource(R.string.players_not_live),
@@ -151,26 +164,12 @@ internal fun DestinationCard(
                     }
                 }
 
-                server != null -> {
-                    Text(
-                        text = server.name,
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                    Text(
-                        text = stringResource(R.string.server_explanation),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.option_sign_in))
-                    }
-                    OutlinedButton(onClick = onPair, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.option_pair))
-                    }
-                    Text(
-                        text = stringResource(R.string.players_sign_in_first),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+                server != null -> ServerRow(
+                    subtitle = server.name,
+                    signedIn = false,
+                    onSignIn = onSignIn,
+                    onSignOut = onSignOut,
+                )
 
                 error != null -> Text(
                     text = error,
@@ -181,6 +180,65 @@ internal fun DestinationCard(
                     text = stringResource(R.string.server_searching),
                     style = MaterialTheme.typography.bodyMedium,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * The row of the Music Assistant server.
+ *
+ * The row names the server that the phone talks to, whatever way the
+ * phone learned of it: the search names the server it found, and the
+ * account names the one it signed in to when the search stays quiet.
+ * The button on the right carries the way in, or the way out.
+ */
+@Composable
+private fun ServerRow(
+    subtitle: String,
+    signedIn: Boolean,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant,
+                RoundedCornerShape(28.dp),
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // The art of the Music Assistant app, the icon its own project
+        // ships, under the Apache 2.0 licence.
+        Image(
+            painter = painterResource(R.drawable.ic_music_assistant),
+            contentDescription = null,
+            modifier = Modifier
+                .size(GlyphSize)
+                .clip(GlyphShape),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.mass_row_title),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+            )
+        }
+        if (signedIn) {
+            OutlinedButton(onClick = onSignOut) {
+                Text(stringResource(R.string.action_sign_out))
+            }
+        } else {
+            OutlinedButton(onClick = onSignIn) {
+                Text(stringResource(R.string.action_sign_in))
             }
         }
     }
@@ -281,3 +339,6 @@ private fun noteOf(player: MassPlayer, names: Map<String, String>): String? {
 
 /** The edge of the glyph that the rows show, the size of a source row icon. */
 private val GlyphSize = 40.dp
+
+/** The rounded square that the server glyph wears. */
+private val GlyphShape = RoundedCornerShape(10.dp)

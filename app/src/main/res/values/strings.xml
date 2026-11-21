@@ -21,11 +21,9 @@
     <!-- The finder of the Source card. -->
     <string name="finder_open">Find the installed media apps</string>
 
-    <!-- The Music Assistant that the phone found. -->
+    <!-- The Music Assistant row of the Destination card. -->
+    <string name="mass_row_title">Music Assistant</string>
     <string name="server_searching">Looking for Music Assistant on the local network…</string>
-    <string name="server_explanation">This is the Music Assistant that the phone found. Sign in to choose the player, or pair the phone as an input.</string>
-    <string name="option_sign_in">Sign into Music Assistant</string>
-    <string name="option_pair">Pair with Music Assistant</string>
 
     <!-- The main screen. -->
     <string name="action_connect">Connect</string>
@@ -47,10 +45,8 @@
     <string name="action_hide_token">Hide the pairing token</string>
 
     <!-- The Music Assistant account. -->
-    <string name="title_account">Music Assistant account</string>
     <string name="title_sign_in">Sign in to Music Assistant</string>
     <string name="account_explanation">Sign in to Music Assistant. The account lets the phone ask the server which players it can send audio to.</string>
-    <string name="account_signed_in">Signed in as %1$s.</string>
     <string name="label_account_server">Server</string>
     <string name="label_account_username">User name</string>
     <string name="label_account_password">Password</string>
@@ -60,7 +56,6 @@
     <string name="action_sign_out">Sign out</string>
 
     <!-- The choice of the player that plays the phone. -->
-    <string name="players_sign_in_first">Sign in to Music Assistant first.</string>
     <string name="players_loading">Reading the players from the server…</string>
     <string name="players_none">The server has no player that can play sound.</string>
     <string name="players_not_available">Not available</string>

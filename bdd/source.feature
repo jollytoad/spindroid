@@ -11,16 +11,14 @@ Feature: SendSpin Source Role
     And a Music Assistant is present on the network
     When the app opens
     Then the Music Assistant name is shown
-    And connection options are presented:
-      | Sign into Music Assistant |
-      | Pair with Music Assistant |
+    And the Destination card offers the Music Assistant row
 
   @requires-music-assistant
   Scenario: Signing into Music Assistant
     Given a fresh install
     And a Music Assistant is present on the network
     When the app opens
-    And "Sign into Music Assistant" is chosen
+    And "Sign in" is chosen
     Then a sign in page is shown
     And the page has a sign in form
     And the form has the fields:
@@ -40,7 +38,7 @@ Feature: SendSpin Source Role
     And a Music Assistant administrator account is available
     And the phone is not paired with the Music Assistant
     When the app opens
-    And "Sign into Music Assistant" is chosen
+    And "Sign in" is chosen
     And the sign in form is filled with the Music Assistant account
     And "Sign in" is pressed
     Then the pairing section says that the phone is paired
