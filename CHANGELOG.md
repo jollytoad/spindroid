@@ -1,18 +1,18 @@
 # Changelog
 
-The record of the nightly releases. The nightly workflow writes an
+The record of the pre-release builds. The release workflow writes an
 entry for every release it publishes, from the product commits since
-the previous nightly, and the same record rides the release page, so
-the file needs no hand care. A forced rerun on the same day replaces
-the release, and the entry of that day with it.
+the previous release, and the same record rides the release page, so
+the file needs no hand care. Every version carries its own entry, so
+a second release of the same day adds a line and replaces nothing.
 
 Every entry lands as a bot commit on the default branch, so pull the
-branch before you push work that follows a nightly.
+branch before you push work that follows a release.
 
 Nightlies published before this file existed carry their notes on the
 release page alone.
 
-<!-- The nightly workflow inserts every new entry below this line. -->
+<!-- The release workflow inserts every new entry below this line. -->
 
 ## Nightly 2026-11-22 — versionCode 6, versionName 2026.11.22
 

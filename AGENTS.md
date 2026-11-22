@@ -61,13 +61,15 @@ scenarios fail. `runBdd` parses the output and fails the build on failure.
 The emulator supports playback capture poorly and passes mDNS unreliably.
 Use a physical device for capture and discovery work.
 
-## Nightly releases
+## Manual pre-releases
 
-`.github/workflows/nightly.yml` releases a dated debug APK when a
-production file changed since the last nightly. Each release adds an
-entry to `CHANGELOG.md` and pushes the file to `main` as
-`github-actions[bot]`. Pull `main` before you push work that follows
-a nightly, or the push is rejected.
+`.github/workflows/release.yml` releases a dated debug APK when it is
+run by hand from the Actions tab. Every run builds and publishes. The
+version is calendar with a counter, YYYY.0M.0D.MICRO: MICRO starts at 0
+and grows with every release of the same day, and the tag is the bare
+version. Each release adds an entry to `CHANGELOG.md` and pushes the
+file to `main` as `github-actions[bot]`. Pull `main` before you push
+work that follows a release, or the push is rejected.
 
 ## Sandbox limits (agent environment)
 

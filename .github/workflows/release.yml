@@ -1,31 +1,26 @@
-# Nightly builds of the debug APK.
+# Manual pre-release builds of the debug APK.
 #
-# One gate keeps the release list clean: the run stops unless a commit
-# touched a production input of the APK. A byte comparison of the APK would
-# be pointless, because every build embeds a new versionCode, so the bytes
-# always differ.
+# The run starts by hand from the Actions tab, so every run builds and
+# publishes: the person who pressed the button meant it.
 #
-# Each release is a dated prerelease that records the commit it was built
-# from, so the next run can find it. The run also lands the release as an
-# entry in CHANGELOG.md, pushed to the default branch as a bot commit,
-# so the branch must be pulled before work that follows a nightly is
-# pushed. GitHub runs schedules on the default branch only, and may
-# delay them by some minutes.
-name: Nightly
+# The version is calendar with a counter, YYYY.0M.0D.MICRO, see
+# https://calver.org. MICRO starts at 0 for the first release of a day
+# and grows with every release of that day, so a rerun adds a release
+# instead of replacing one. The tag is the bare version.
+#
+# Each release is marked as a pre-release, and records the commit it
+# was built from, so the next run can name the commits between the
+# two. The run also lands the release as an entry in CHANGELOG.md,
+# pushed to the default branch as a bot commit, so the branch must be
+# pulled before work that follows a release is pushed.
+name: Release
 
 on:
-  schedule:
-    - cron: "21 3 * * *"
   workflow_dispatch:
-    inputs:
-      force:
-        description: Build even when no commit landed since the last nightly.
-        default: false
-        type: boolean
 
 concurrency:
-  group: nightly
-  # A delayed run must not cancel one that already started.
+  group: release
+  # A second run of the day must not cancel one that already started.
   cancel-in-progress: false
 
 permissions:
@@ -35,16 +30,16 @@ env:
   APK: app/build/outputs/apk/debug/app-debug.apk
 
 jobs:
-  nightly:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the whole history
         uses: actions/checkout@v4
         with:
-          # The release notes list the commits between two nightlies.
+          # The release notes list the commits between two releases.
           fetch-depth: 0
 
-      - name: Find the previous nightly release
+      - name: Find the previous release
         id: previous
         env:
           GH_TOKEN: ${{ github.token }}
@@ -52,7 +47,7 @@ jobs:
           set -euo pipefail
           releases=$(gh api "repos/${{ github.repository }}/releases?per_page=100")
           latest=$(jq -r \
-            '[.[] | select(.draft | not) | select(.tag_name | startswith("nightly-"))] | sort_by(.created_at) | last // empty' \
+            '[.[] | select(.draft | not)] | sort_by(.created_at) | last // empty' \
             <<< "$releases")
           if [ -n "$latest" ]; then
             sha=$(jq -r '.target_commitish' <<< "$latest")
@@ -61,74 +56,49 @@ jobs:
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-      - name: Decide whether the APK can change
-        id: gate
+      - name: Work out the version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          previous="${{ steps.previous.outputs.sha }}"
-          head="${{ github.sha }}"
-          if [ "${{ inputs.force }}" = "true" ]; then
-            changed=true
-            reason="the run was forced"
-          elif [ -z "$previous" ]; then
-            changed=true
-            reason="no previous nightly release exists"
-          elif ! git cat-file -e "$previous^{commit}" 2> /dev/null; then
-            # The history was rewritten, so the previous SHA is gone. That
-            # counts as a change, so a broken state never skips the build.
-            changed=true
-            reason="the previous nightly SHA is no longer in the history"
-          else
-            files=$(git diff --name-only "$previous" "$head")
-            # The production inputs of the APK, then the test trees taken
-            # back out. Everything else is prose, plans, or tooling.
-            relevant=$(grep -E \
-              -e '^app/' -e '^sendspin/' -e '^mass/' -e '^gradle/' \
-              -e '^gradlew(\.bat)?$' -e '^build\.gradle\.kts$' \
-              -e '^settings\.gradle\.kts$' -e '^gradle\.properties$' \
-              <<< "$files" \
-              | grep -v -E '^(app|sendspin|mass)/src/(test|androidTest)/' \
-              || true)
-            if [ -n "$relevant" ]; then
-              changed=true
-              reason="a production file changed"
-            else
-              changed=false
-              reason="no production file changed"
-            fi
-          fi
-          echo "changed=$changed" >> "$GITHUB_OUTPUT"
-          if [ "$changed" = "true" ]; then
-            echo "The gate opened: $reason."
-          else
-            echo "The gate closed: no production file changed since $previous."
-          fi
+          calver=$(date -u +%Y.%m.%d)
+          # The counter of the day starts at 0, so the read takes the
+          # highest one the releases of that day already carry. No
+          # release of the day reads as -1, and the addition below
+          # turns it into the first one.
+          micro=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
+            | jq -r --arg base "$calver" \
+              '[.[] | select(.draft | not) | .tag_name
+                | select(. != null)
+                | select(startswith($base + "."))
+                | capture("(?<n>[0-9]+)$").n
+                | tonumber] | max // -1')
+          micro=$((micro + 1))
+          version="$calver.$micro"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "The release version is $version."
 
       - name: Set up JDK 21
-        if: steps.gate.outputs.changed == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
 
       - name: Set up Gradle
-        if: steps.gate.outputs.changed == 'true'
         uses: gradle/actions/setup-gradle@v4
 
       - name: Set up Python for the interop test
-        if: steps.gate.outputs.changed == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
       - name: Install the Python packages of the test server
-        if: steps.gate.outputs.changed == 'true'
         # The interop test launches tools/test_server.py, which needs both
         # packages. The runner image has neither guaranteed.
         run: python3 -m pip install cryptography "websockets~=17.0"
 
       - name: Prepare the Android SDK and its scratch folder
-        if: steps.gate.outputs.changed == 'true'
         run: |
           set -euo pipefail
           # AGP reads the SDK location from local.properties. The runner image
@@ -151,26 +121,17 @@ jobs:
           echo "ANDROID_PREFS_ROOT=$PWD/.android-home" >> "$GITHUB_ENV"
 
       - name: Run the JVM tests
-        if: steps.gate.outputs.changed == 'true'
         run: ./gradlew :sendspin:test :mass:test :app:test
 
       - name: Build the APK
-        id: build
-        if: steps.gate.outputs.changed == 'true'
         run: |
           set -euo pipefail
-          # Calendar versioning, YYYY.0M.0D, see https://calver.org.
-          # The value is recorded here, so the release notes name the exact
-          # version the APK carries.
-          calver=$(date -u +%Y.%m.%d)
-          echo "versionName=$calver" >> "$GITHUB_OUTPUT"
           ./gradlew :app:assembleDebug \
-            -Pnightly.versionCode="$GITHUB_RUN_NUMBER" \
-            -Pnightly.versionName="$calver"
+            -Prelease.versionCode="$GITHUB_RUN_NUMBER" \
+            -Prelease.versionName="${{ steps.version.outputs.version }}"
 
       - name: Hash the APK
         id: hash
-        if: steps.gate.outputs.changed == 'true'
         run: |
           set -euo pipefail
           sha=$(sha256sum "$APK" | cut -d' ' -f1)
@@ -178,49 +139,42 @@ jobs:
           echo "APK SHA-256: $sha"
 
       - name: Keep the APK as a run artifact
-        if: steps.gate.outputs.changed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: spindroid-nightly-${{ github.run_number }}
+          name: spindroid-release-${{ github.run_number }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
-      - name: Publish the nightly release
-        if: steps.gate.outputs.changed == 'true'
+      - name: Publish the pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          date=$(date -u +%F)
-          tag="nightly-$date"
-          asset_name="spindroid-nightly-$date-${{ github.run_number }}.apk"
+          version="${{ steps.version.outputs.version }}"
+          asset_name="spindroid-$version.apk"
           cp "$APK" "$asset_name"
-
-          # A forced rerun on the same day replaces the release of that day.
-          if gh release view "$tag" > /dev/null 2>&1; then
-            gh release delete "$tag" --yes --cleanup-tag
-          fi
 
           previous="${{ steps.previous.outputs.sha }}"
           if [ -n "$previous" ]; then
             range="$previous..${{ github.sha }}"
-            # The range can be empty when the history was rewritten. That
-            # is no reason to stop the release. The bot that records the
+            # The range can be empty when the run landed without a new
+            # commit, or when the history was rewritten. That is no
+            # reason to stop the release. The bot that records the
             # changelog commits nothing but the changelog, and such a
             # commit says nothing about the product, so the lists leave
             # them out.
             commits=$(git log --oneline "$range" -- . ':(exclude)CHANGELOG.md' | head -n 50 || true)
             bullets=$(git log --pretty=format:'- `%h` %s' "$range" -- . ':(exclude)CHANGELOG.md' | head -n 50 || true)
-            headline="Commits since the previous nightly (\`$range\`):"
+            headline="Commits since the previous release (\`$range\`):"
           else
             range=""
             commits=$(git log --oneline -n 1)
             bullets=$(git log --pretty=format:'- `%h` %s' -n 1)
-            headline="The first nightly build. Commit:"
+            headline="The first release build. Commit:"
           fi
           if [ -z "$bullets" ]; then
-            # A forced run can land without a product commit in range.
-            bullets="- No product commit; the run was forced."
+            # A manual run can land without a product commit in range.
+            bullets="- No product commit since the previous release."
           fi
           {
             echo "Debug APK built from \`${{ github.sha }}\`."
@@ -234,13 +188,13 @@ jobs:
             echo "APK SHA-256: \`${{ steps.hash.outputs.sha }}\`"
             echo
             echo "versionCode: ${{ github.run_number }}"
-            echo "versionName: ${{ steps.build.outputs.versionName }}"
+            echo "versionName: $version"
           } > release-notes.md
 
           # The changelog entry carries the same facts, in the file
           # format, for the next step to record.
           {
-            echo "## Nightly $date — versionCode ${{ github.run_number }}, versionName ${{ steps.build.outputs.versionName }}"
+            echo "## $version — versionCode ${{ github.run_number }}, versionName $version"
             echo
             echo "Built from \`${{ github.sha }}\`."
             echo "APK SHA-256: \`${{ steps.hash.outputs.sha }}\`."
@@ -250,45 +204,28 @@ jobs:
             echo "$bullets"
           } > changelog-entry.md
 
-          gh release create "$tag" "$asset_name" \
+          gh release create "$version" "$asset_name" \
             --prerelease \
             --target "${{ github.sha }}" \
-            --title "Nightly $date" \
+            --title "Pre-release $version" \
             --notes-file release-notes.md
 
-      - name: Record the nightly in the changelog
-        if: steps.gate.outputs.changed == 'true'
+      - name: Record the release in the changelog
         run: |
           set -euo pipefail
-          date=$(date -u +%F)
-          python3 - "$date" <<'PY'
+          python3 <<'PY'
           import sys
 
-          date = sys.argv[1]
           entry = open("changelog-entry.md").read().rstrip("\n") + "\n\n"
           text = open("CHANGELOG.md").read()
-          marker = "<!-- The nightly workflow inserts every new entry below this line. -->"
+          marker = "<!-- The release workflow inserts every new entry below this line. -->"
           if marker not in text:
               sys.exit("The marker line is missing from CHANGELOG.md.")
 
-          # A forced rerun replaces the release of its day, so the entry
-          # of that day leaves first, whatever its versionCode was.
-          lines = text.splitlines(keepends=True)
-          kept = []
-          i = 0
-          while i < len(lines):
-              if lines[i].startswith("## Nightly " + date + " "):
-                  i += 1
-                  while i < len(lines) and not lines[i].startswith("## "):
-                      i += 1
-                  continue
-              kept.append(lines[i])
-              i += 1
-          text = "".join(kept)
-
           # The entry goes under the marker, newest first, with one
           # blank line before it and one after it, whatever the file
-          # carried before.
+          # carried before. Each version carries its own entry, so a
+          # second release of the same day removes nothing.
           spot = text.index(marker) + len(marker)
           rest = text[spot:].lstrip("\n")
           open("CHANGELOG.md", "w").write(text[:spot] + "\n\n" + entry + rest)
@@ -300,9 +237,9 @@ jobs:
             echo "The changelog already carries this release."
             exit 0
           fi
-          git commit -m "Record nightly $date in the changelog"
+          git commit -m "Record pre-release ${{ steps.version.outputs.version }} in the changelog"
           # The release stands even when the branch refuses the bot or
-          # moved on; the next nightly records its own entry either way.
+          # moved on; the next release records its own entry either way.
           git push origin HEAD:"${{ github.ref_name }}" || \
             echo "::warning::The changelog commit could not be pushed. Record it by hand."
 
@@ -311,8 +248,6 @@ jobs:
         run: |
           if [ "${{ job.status }}" != "success" ]; then
             echo "The run failed. Read the steps above."
-          elif [ "${{ steps.gate.outputs.changed }}" != "true" ]; then
-            echo "No production file changed since the last nightly release. Nothing was built."
           else
-            echo "A new nightly release was published."
+            echo "A new pre-release was published."
           fi

@@ -28,15 +28,15 @@ android {
         applicationId = "app.gubbins.spindroid"
         minSdk = 33
         targetSdk = 36
-        // CI passes -Pnightly.versionCode and -Pnightly.versionName, so each
-        // nightly build has a growing number and a calendar version, see
-        // https://calver.org. A build without the properties keeps
-        // versionCode 1 and versionName 0.1.0.
-        // See .github/workflows/nightly.yml.
-        versionCode = providers.gradleProperty("nightly.versionCode")
+        // CI passes -Prelease.versionCode and -Prelease.versionName, so
+        // each pre-release build has a growing number and a calendar
+        // version with a counter, see https://calver.org. A build without
+        // the properties keeps versionCode 1 and versionName 0.1.0.
+        // See .github/workflows/release.yml.
+        versionCode = providers.gradleProperty("release.versionCode")
             .map(String::toInt)
             .getOrElse(1)
-        versionName = providers.gradleProperty("nightly.versionName")
+        versionName = providers.gradleProperty("release.versionName")
             .getOrElse("0.1.0")
         testInstrumentationRunner = "io.cucumber.android.runner.CucumberAndroidJUnitRunner"
     }
