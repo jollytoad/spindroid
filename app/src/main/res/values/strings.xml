@@ -5,7 +5,7 @@
     <!-- The two cards. -->
     <string name="title_source">Source</string>
     <string name="title_destination">Destination</string>
-    <string name="source_empty">No app holds a media session. Play something, then this list fills in.</string>
+    <string name="source_empty">No media app is installed on this phone, so there is nothing to pick.</string>
     <string name="source_access_missing">SpinDroid cannot see what plays, because the notification access is missing. Allow it, and the list fills itself.</string>
     <string name="source_access_allow">Allow access</string>
     <string name="source_access_restricted">If the toggle answers with Restricted setting, open the app info, tap the ⋮ menu, and choose Allow restricted settings. Then come back and allow the access.</string>
@@ -18,8 +18,10 @@
     <string name="source_gone">The app is gone, so the stream keeps its source. Pick again.</string>
     <string name="open_app">Open %1$s</string>
 
-    <!-- The finder of the Source card. -->
-    <string name="finder_open">Find the installed media apps</string>
+    <!-- The show-all control of the Source card. The open of the app
+         reads the installed media apps on its own; the control reads
+         them again, and every run forgets the rows a swipe dropped. -->
+    <string name="show_all_media_apps">Show all media apps</string>
 
     <!-- The Music Assistant row of the Destination card. -->
     <string name="mass_row_title">Music Assistant</string>
@@ -50,8 +52,7 @@
     <string name="players_not_available">Not available</string>
     <string name="players_not_live">The phone is not connected to the server, so it has no sound to send yet. Pick a source and a player, and the stream starts on its own.</string>
     <string name="players_send">send the audio of the phone to this player</string>
-    <string name="players_refresh">Read the player list again</string>
-    <string name="action_refresh">Refresh</string>
+    <string name="show_all_players">Show all players</string>
 
     <!-- The technical details panel. -->
     <string name="title_technical_guff">Technical Guff</string>

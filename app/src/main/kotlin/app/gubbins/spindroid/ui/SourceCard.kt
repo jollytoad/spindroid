@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -35,7 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -49,9 +49,10 @@ import app.gubbins.spindroid.capture.SessionApps
  * The card that lists the sources.
  *
  * The rows read alphabetically: the apps that hold a media session,
- * each with the transport buttons of its session, and, when the finder
- * ran, the dimmed rows of the apps it found. The pick chooses the one
- * app whose audio the capture should follow.
+ * each with the transport buttons of its session, and the dimmed rows
+ * of the installed media apps, which the open of the app reads on its
+ * own. The show-all control at the bottom right reads them again. The
+ * pick chooses the one app whose audio the capture should follow.
  */
 @Composable
 internal fun SourceCard(
@@ -75,21 +76,10 @@ internal fun SourceCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.title_source),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = onOpenFinder) {
-                    // The Video Search glyph: the magnifier says the
-                    // hunt, the play mark inside it says the media.
-                    Icon(
-                        painter = painterResource(R.drawable.ic_video_search),
-                        contentDescription = stringResource(R.string.finder_open),
-                    )
-                }
-            }
+            Text(
+                text = stringResource(R.string.title_source),
+                style = MaterialTheme.typography.titleMedium,
+            )
             if (apps.isEmpty()) {
                 if (missingAccess) {
                     // The grant is what stands between the user and the
@@ -150,6 +140,22 @@ internal fun SourceCard(
                                 onOpen = { onOpen(app.packageName) },
                             )
                         }
+                    }
+                }
+            }
+            if (!missingAccess) {
+                // The show-all control reads the installed media apps
+                // again: it picks up apps that arrived since the open,
+                // and it brings back the rows a swipe dropped. The
+                // control waits for the grant, because a finder answer
+                // before the grant would bury the road to the access
+                // toggle that the card shows instead.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = onOpenFinder) {
+                        Text(text = stringResource(R.string.show_all_media_apps))
                     }
                 }
             }

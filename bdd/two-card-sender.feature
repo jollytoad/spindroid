@@ -6,16 +6,16 @@ Feature: The two-card sender screen
   Destination card lists the players the network offers. The second
   of the two picks starts the stream on its own, and the stop on the
   picked destination row ends it. A swipe drops a destination row
-  until the refresh control beside the title reads the list again,
-  and the row that carries the pick refuses the swipe.
+  until the Show all players control reads the list again, and the
+  row that carries the pick refuses the swipe.
 
   @requires-music-assistant
-  Scenario: An empty screen on first open
+  Scenario: A first open shows the two cards
     Given a fresh install
     And a Music Assistant is present on the network
     And the phone holds no media session
     When the app opens
-    Then the Source card says that no app holds a media session
+    Then the Source card offers to show all media apps
     And the Destination card offers the Music Assistant row
 
   @requires-music-assistant
@@ -111,5 +111,5 @@ Feature: The two-card sender screen
     And the app is signed into Music Assistant
     When the second player row is swiped aside
     Then the Destination card no longer lists the second player
-    When the destination refresh is chosen
+    When Show all players is chosen
     Then the Destination card lists the second player again

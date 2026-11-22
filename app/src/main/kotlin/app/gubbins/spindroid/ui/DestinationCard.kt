@@ -11,15 +11,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
@@ -48,10 +47,11 @@ import app.gubbins.spindroid.mass.playerIconOf
  * sign in, the card also lists the players, and the row pick sends the
  * audio of the phone to the one player it names; the pick that lands
  * last starts the stream on its own. While the stream runs, the picked
- * row carries the stop for it. A swipe aside drops a row from the list
- * until the refresh control beside the title runs, which reads the
- * list again and forgets every drop. The row that carries the pick
- * refuses the swipe, the way a session row does on the Source card.
+ * row carries the stop for it. The Show all players control at the
+ * bottom right reads the list again and forgets every drop, so a
+ * swipe aside hides a row only until it runs. The row that carries the
+ * pick refuses the swipe, the way a session row does on the Source
+ * card.
  */
 @Composable
 internal fun DestinationCard(
@@ -77,24 +77,10 @@ internal fun DestinationCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.title_destination),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                // The list exists only with an account, so the refresh
-                // control sits with it. Each run forgets the drops, the
-                // way the finder of the Source card does.
-                if (signedIn) {
-                    IconButton(onClick = onRefresh) {
-                        Icon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = stringResource(R.string.players_refresh),
-                        )
-                    }
-                }
-            }
+            Text(
+                text = stringResource(R.string.title_destination),
+                style = MaterialTheme.typography.titleMedium,
+            )
             when {
                 signedIn -> {
                     // The row stays above the players, so the card keeps
@@ -189,6 +175,19 @@ internal fun DestinationCard(
                     text = stringResource(R.string.server_searching),
                     style = MaterialTheme.typography.bodyMedium,
                 )
+            }
+            if (signedIn) {
+                // The list exists only with an account, so the control
+                // sits with it. Each run forgets the drops, the way the
+                // show-all control of the Source card does.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = onRefresh) {
+                        Text(text = stringResource(R.string.show_all_players))
+                    }
+                }
             }
         }
     }

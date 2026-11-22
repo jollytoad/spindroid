@@ -144,12 +144,12 @@ object SessionApps {
     private var retryPending = false
 
     /**
-     * The finder: the question the finder button asks, and its answer.
+     * The finder: the question the show-all control asks, and its answer.
      *
-     * The finder is a choice of the screen, so the app probes the installed
-     * apps only when the user asks. A test stands in for the probe, so a
-     * BDD scenario names a known list of apps instead of reading the
-     * device it runs on.
+     * The open of the app asks the question on its own, and the show-all
+     * control of the Source card asks it again. A test stands in for the
+     * probe, so a BDD scenario names a known list of apps instead of
+     * reading the device it runs on.
      */
     fun interface MediaAppFinder {
         fun installedMediaApps(): List<SessionApp>
@@ -205,10 +205,12 @@ object SessionApps {
     /**
      * Runs the finder, and offers what it finds to the card.
      *
-     * The finder is the one view of every installed media app, so each
-     * run forgets the drops: the apps a swipe hid come back, and the
-     * card holds the whole answer of the phone again. A swipe hides a
-     * row only until the next run of the finder.
+     * The open of the app runs this, and the show-all control of the
+     * Source card runs it again. The finder is the one view of every
+     * installed media app, so each run forgets the drops: the apps a
+     * swipe hid come back, and the card holds the whole answer of the
+     * phone again. A swipe hides a row only until the next run of the
+     * finder.
      */
     fun runFinder() {
         val found = finder?.installedMediaApps() ?: return
@@ -235,6 +237,11 @@ object SessionApps {
      * The registration fails with a security exception when the user has
      * not granted the notification listener access yet, so the reading
      * retires itself until the grant arrives.
+     *
+     * The reading also runs the finder, so the card opens with every
+     * installed media app already dimmed among the sessions. The grant
+     * path below stays quiet, because the probe needs no grant, and the
+     * card must show the road to the toggle alone.
      */
     fun start(appContext: Context) {
         stop()
@@ -254,6 +261,10 @@ object SessionApps {
         }
         listener = changed
         read(appContext)
+        // The open of the app shows every installed media app on its
+        // own, so the finder runs here. The show-all control of the
+        // Source card runs it again, and each run forgets the drops.
+        runFinder()
     }
 
     /**
@@ -387,11 +398,14 @@ object SessionApps {
      *
      * The binding is the earliest sign that the user allowed the access,
      * so the reading looks again instead of waiting for the retry. The
-     * reading stands down when the screen is closed, and the next start
-     * of the screen reads anyway.
+     * finder runs too, so the offers arrive without another tap from the
+     * user, the way they arrive at the open of the app. The reading
+     * stands down when the screen is closed, and the next start of the
+     * screen reads anyway.
      */
     fun listenerConnected() {
         reread()
+        handler.post { runFinder() }
     }
 
     /**

@@ -2,7 +2,9 @@ package app.gubbins.spindroid.bdd.steps
 
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -217,25 +219,12 @@ class TwoCardSteps {
                 context.getString(R.string.mass_row_title),
             ).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText(
-            context.getString(R.string.mass_row_title),
-        ).assertIsDisplayed()
-        composeRule.onNodeWithText(
-            context.getString(R.string.action_sign_in),
-        ).assertIsDisplayed()
-    }
-
-    @Then("the Source card says that no app holds a media session")
-    fun theSourceCardSaysThatNoAppHoldsASession() {
-        composeRule.onNodeWithText(
-            context.getString(R.string.source_empty),
-        ).assertIsDisplayed()
-    }
-
-    @Then("the Destination card asks for a sign in")
-    fun theDestinationCardAsksForASignIn() {
-        composeRule.onNodeWithText(
-            context.getString(R.string.mass_row_title),
+        // The Music Assistant app of the phone answers the finder too,
+        // so its dimmed Source row reads the same name. The row of the
+        // card is the plain one: the server row carries no click of
+        // its own, while a discovered Source row is its own pick.
+        composeRule.onNode(
+            hasText(context.getString(R.string.mass_row_title)) and hasNoClickAction(),
         ).assertIsDisplayed()
         composeRule.onNodeWithText(
             context.getString(R.string.action_sign_in),
@@ -271,14 +260,17 @@ class TwoCardSteps {
     @Given("the phone holds no media session")
     fun thePhoneHoldsNoMediaSession() {
         // A session that rests still shows a row, so a scenario that
-        // reads an empty Source card needs a phone where no app holds
-        // one at all. Every holder is stopped, playing or not.
+        // reads a card without session rows needs a phone where no app
+        // holds one at all. Every holder is stopped, playing or not.
+        // The finder's dimmed rows belong to no session, so they stay.
         val holders = SessionApps.apps.value.filter {
-            it.packageName != context.packageName
+            it.holdsSession && it.packageName != context.packageName
         }
         holders.forEach { forceStop(it.packageName) }
         awaitUntil(AWAIT_QUIET_MILLIS) {
-            SessionApps.apps.value.none { it.packageName != context.packageName }
+            SessionApps.apps.value.none {
+                it.holdsSession && it.packageName != context.packageName
+            }
         }
     }
 
@@ -299,12 +291,14 @@ class TwoCardSteps {
         )
     }
 
-    @When("the finder is chosen")
+    @When("Show all media apps is chosen")
     fun theFinderIsChosen() {
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription(
-            context.getString(R.string.finder_open),
-        ).performClick()
+        // The control reads at the bottom right of the card, so the
+        // scroll brings it in first.
+        composeRule.onNodeWithText(
+            context.getString(R.string.show_all_media_apps),
+        ).performScrollTo().performClick()
         composeRule.waitForIdle()
     }
 
@@ -393,12 +387,14 @@ class TwoCardSteps {
         composeRule.waitForIdle()
     }
 
-    @When("the destination refresh is chosen")
+    @When("Show all players is chosen")
     fun theDestinationRefreshIsChosen() {
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription(
-            context.getString(R.string.players_refresh),
-        ).performClick()
+        // The control reads at the bottom right of the card, so the
+        // scroll brings it in first.
+        composeRule.onNodeWithText(
+            context.getString(R.string.show_all_players),
+        ).performScrollTo().performClick()
         composeRule.waitForIdle()
     }
 
@@ -437,20 +433,46 @@ class TwoCardSteps {
 
     @Then("the finder offers {string} again")
     fun theFinderOffersAgain(app: String) {
-        // The probe runs again through the finder, and every run forgets
-        // the drops, so the row the swipe hid comes back.
-        composeRule.onNodeWithContentDescription(
-            context.getString(R.string.finder_open),
-        ).performClick()
+        // The probe runs again through the show-all control, and every
+        // run forgets the drops, so the row the swipe hid comes back.
+        composeRule.onNodeWithText(
+            context.getString(R.string.show_all_media_apps),
+        ).performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.waitUntil(RealServer.SCREEN_TIMEOUT_MILLIS) {
             composeRule.onAllNodes(row(app)).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
+    @Then("the Source card offers to show all media apps")
+    fun theSourceCardOffersToShowAllMediaApps() {
+        composeRule.onNodeWithText(
+            context.getString(R.string.show_all_media_apps),
+        ).performScrollTo().assertIsDisplayed()
+    }
+
+    @Given("{word} answers the finder on this phone")
+    fun appAnswersTheFinderOnThisPhone(label: String) {
+        // The open of the app runs the same probe on its own, so the
+        // guard asks the question here too: it fails clearly on a phone
+        // that holds no media app of that name, instead of letting the
+        // row assertion fail for no visible reason.
+        val manager = context.packageManager
+        val answers = manager.queryIntentServices(
+            Intent("android.media.browse.MediaBrowserService"),
+            0,
+        ).any { entry ->
+            val info = entry.serviceInfo ?: return@any false
+            manager.getApplicationLabel(info.applicationInfo).toString() == label
+        }
+        check(answers) { "$label does not answer the finder on this phone." }
+    }
+
     @Then("the Source card lists {word}")
     fun theSourceCardLists(app: String) {
-        composeRule.onNode(row(app)).assertIsDisplayed()
+        // The row can sit past the fold on a phone with many media
+        // apps, so the scroll brings it in first.
+        composeRule.onNode(row(app)).performScrollTo().assertIsDisplayed()
     }
 
     @Then("the Source card no longer lists {word}")
@@ -494,6 +516,10 @@ class TwoCardSteps {
 
     /** The node of one Source card row, named after the session title. */
     private fun row(name: String) = hasText(name, substring = true) and hasClickAction()
+
+    /** Matches the nodes that carry no click of their own. */
+    private fun hasNoClickAction(): SemanticsMatcher =
+        SemanticsMatcher("has no click action") { !it.config.contains(SemanticsActions.OnClick) }
 
     /** The phone, for the checks that read past the app's own window. */
     private fun device() = UiDevice.getInstance(
