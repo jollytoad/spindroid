@@ -11,7 +11,7 @@ Feature: The phone and its volume
 
   @requires-music-assistant
   Scenario: A quiet phone still feeds the stream
-    Given the phone's media volume reads 12
+    Given the phone's media volume reads 5
     And a tone plays on the phone
     And the stream sends Tidal's audio to the first player
     And the captured sound rises above silence
@@ -20,12 +20,12 @@ Feature: The phone and its volume
 
   @requires-music-assistant
   Scenario: The phone goes quiet for the stream and comes back
-    Given the phone's media volume reads 12
+    Given the phone's media volume reads 5
     And the stream sends Tidal's audio to the first player
     Then the phone's media volume still reads 0
     When the stop on the first player's row is pressed
     Then the stream stops
-    And the phone's media volume still reads 12
+    And the phone's media volume still reads 5
 
   @requires-music-assistant
   Scenario: A phone the user muted stays muted
@@ -44,10 +44,11 @@ Feature: The phone and its volume
     And the phone's media volume still reads 0
 
   @requires-music-assistant
-  Scenario: The slider of a player sets its volume
+  Scenario: The slider of a player follows the drag
     Given "Sign in" is chosen
     And the sign in form is filled with the Music Assistant account
     And "Sign in" is pressed
     And the app is signed into Music Assistant
-    When the slider of the first player is dragged to its end
-    Then the first player's volume reads high
+    And the first player's volume is set to 30
+    When the slider of the first player is nudged a little
+    Then the first player's volume reads between 35 and 45

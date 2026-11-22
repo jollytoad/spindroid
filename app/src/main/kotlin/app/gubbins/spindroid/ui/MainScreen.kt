@@ -116,6 +116,18 @@ fun MainScreen(
                 )
             }
 
+            // A destination pick landed with no source in the other card,
+            // so the stream cannot start and a silent nothing would read
+            // as a broken tap. The line names what the pick waits for, and
+            // it leaves on its own the moment a source lands, because it
+            // reads the picks rather than a tap that happened once.
+            if (!running && playerPick != null && pickedSession == null) {
+                Text(
+                    text = stringResource(R.string.destination_awaits_source),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

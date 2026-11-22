@@ -114,6 +114,5 @@ class PhoneVolumeSteps {
         const val POLL_MILLIS = 250L
 
         /** The volume a courteous end leaves on the phone. */
-        const val AUDIBLE_VOLUME = 12
-    }
+        const val AUDIBLE_VOLUME = 12    }
 }

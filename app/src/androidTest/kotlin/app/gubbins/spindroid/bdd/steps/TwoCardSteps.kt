@@ -58,7 +58,13 @@ class TwoCardSteps {
 
     @After
     fun turnPortraitAgain() {
-        composeRule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        // The landscape scenario asks the sensor for its view, and the
+        // plain UNSPECIFIED lets the sensor keep turning the phone after
+        // the scenario ends. A phone that lies at an angle then rotates
+        // mid-scenario later on, the tracked activity dies with it, and
+        // the next compose read finds no tree. The pinned portrait asks
+        // no sensor, so the next scenario starts from a still screen.
+        composeRule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
 
     @After
@@ -73,10 +79,14 @@ class TwoCardSteps {
 
     @Before
     fun startClean() {
-        // The drops live in the process, one scenario at a time, so
-        // a swipe that the previous scenario made never hides a row here.
+        // The drops and the picks live in the process, one scenario at a
+        // time, so a swipe or a pick that the previous scenario made
+        // never hides a row or starts a stream here. A stale pick is
+        // the sneakiest of them: a scenario that taps a destination
+        // row with one behind it starts the consent chain at once.
         TestSession.release()
         SessionApps.resetDiscards()
+        SessionApps.forgetPick()
     }
 
     @Given("no media app holds a session")
@@ -675,6 +685,15 @@ class TwoCardSteps {
         }
     }
 
+    @Then("the Destination card says the stream waits for a source")
+    fun theDestinationCardSaysTheStreamWaitsForASource() {
+        // The line names what the pick waits for, so a tap that cannot
+        // start the stream still tells the user what to do.
+        composeRule.onNodeWithText(
+            context.getString(R.string.destination_awaits_source),
+        ).assertIsDisplayed()
+    }
+
     @When("the second player is picked on the Destination card")
     fun secondPlayerIsPicked() {
         val label = ServerPlayers.secondLabel()
@@ -842,8 +861,12 @@ class TwoCardSteps {
         /** How long the foreground is watched after a pick. */
         const val WATCH_OPEN_MILLIS = 1_500L
 
-        /** How long an app may take to reach the foreground. */
-        const val AWAIT_OPEN_MILLIS = 15_000L
+        /** How long an app may take to reach the foreground.
+
+         * A cold start on a phone that carries the whole suite can take
+         * twice the time a warm one takes, so the wait leaves room for
+         * the slowest launch the phone has in it. */
+        const val AWAIT_OPEN_MILLIS = 30_000L
 
         /** How long the stream may take to reach the picked player. */
         const val AWAIT_STREAM_MILLIS = 30_000L

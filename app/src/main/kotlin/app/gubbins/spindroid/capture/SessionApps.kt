@@ -354,6 +354,18 @@ object SessionApps {
         mutablePicked.value = packageName
     }
 
+    /**
+     * Forgets the picked app.
+     *
+     * The pick lives for as long as the process does, because a user
+     * who stops a stream and taps the row again asks for a retry. The
+     * BDD harness uses this between scenarios, so every scenario
+     * starts from the state a fresh open shows.
+     */
+    fun forgetPick() {
+        mutablePicked.value = null
+    }
+
     /** Sends play to the picked app's session. */
     fun play(packageName: String) {
         handlers[packageName]?.transportControls?.play()

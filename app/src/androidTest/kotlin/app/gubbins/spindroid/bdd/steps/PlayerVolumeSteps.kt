@@ -12,7 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
-import androidx.compose.ui.test.swipeRight
+import io.cucumber.java.After
 
 /**
  * The steps that drive the loudness of the players.
@@ -21,15 +21,38 @@ import androidx.compose.ui.test.swipeRight
  * read it through the administrator API rather than through the app:
  * a step that read the app's own state would only echo back what the
  * app said it did.
+ *
+ * The players are real speakers in a real home, so the steps stay
+ * gentle: no step drives a volume high, and every volume a scenario
+ * moves goes back to what it read before the scenario touched it.
  */
 class PlayerVolumeSteps {
     private val composeRule get() = ComposeRuleHolder.current.composeRule
     private val context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
+    /** The loudness each touched player read before the scenario moved it. */
+    private val beforeScenario = mutableMapOf<String, Int>()
+
+    @After
+    fun putTheVolumesBack() {
+        // The speakers belong to a home, not to the suite, so every
+        // volume a scenario moved returns to where it read before.
+        for ((playerId, volume) in beforeScenario) {
+            try {
+                AdminApi.setVolume(theServer().url, token(), playerId, volume)
+            } catch (ignored: Exception) {
+                // A scenario that never found the server has nothing to
+                // put back.
+            }
+        }
+        beforeScenario.clear()
+    }
+
     @io.cucumber.java.en.Given("the {word} player's volume is set to {int}")
     fun thePlayersVolumeIsSetTo(player: String, volume: Int) {
         val id = playerVolumeId(player)
+        rememberWhatItRead(id)
         adminSetVolume(id, volume)
         awaitUntil(AWAIT_VOLUME_MILLIS) { adminVolumeOf(id) == volume }
         // The app reads the list again on its own clock, and the volume
@@ -44,10 +67,13 @@ class PlayerVolumeSteps {
         awaitUntil(AWAIT_VOLUME_MILLIS) { adminVolumeOf(id) == volume }
     }
 
-    @io.cucumber.java.en.Then("the {word} player's volume reads high")
-    fun thePlayersVolumeReadsHigh(player: String) {
+    @io.cucumber.java.en.Then("the {word} player's volume reads between {int} and {int}")
+    fun thePlayersVolumeReadsBetween(player: String, low: Int, high: Int) {
         val id = playerVolumeId(player)
-        awaitUntil(AWAIT_VOLUME_MILLIS) { (adminVolumeOf(id) ?: 0) > HIGH_VOLUME }
+        awaitUntil(AWAIT_VOLUME_MILLIS) {
+            val now = adminVolumeOf(id) ?: -1
+            now in low..high
+        }
     }
 
     @io.cucumber.java.en.When("the volume key is pressed {int} times")
@@ -62,8 +88,10 @@ class PlayerVolumeSteps {
         }
     }
 
-    @io.cucumber.java.en.When("the slider of the {word} player is dragged to its end")
-    fun theSliderIsDraggedToItsEnd(player: String) {
+    @io.cucumber.java.en.When("the slider of the {word} player is nudged a little")
+    fun theSliderIsNudgedALittle(player: String) {
+        val id = playerVolumeId(player)
+        rememberWhatItRead(id)
         val label = playerLabel(player)
         composeRule.waitForIdle()
         val slider = composeRule.onNodeWithContentDescription(
@@ -71,18 +99,29 @@ class PlayerVolumeSteps {
         )
         slider.performScrollTo()
         // The slider takes a drag that starts on its thumb, wherever
-        // the value left it, so the gesture starts there and follows
-        // the track to its end.
+        // the value left it, so the gesture starts there and moves a
+        // short way along the track, the way a careful hand would.
         val before = slider.fetchSemanticsNode()
             .config[SemanticsProperties.ProgressBarRangeInfo].current
         slider.performTouchInput {
             swipe(
                 start = center.copy(x = width * before),
-                end = center.copy(x = width * 0.95f),
+                end = center.copy(x = width * (before + NUDGE)),
                 durationMillis = DRAG_MILLIS.toLong(),
             )
         }
         composeRule.waitForIdle()
+    }
+
+    /**
+     * Keeps the loudness a player read before the scenario moved it.
+     *
+     * The first touch wins, so a scenario that sets a baseline and then
+     * moves the slider still puts back the loudness the home had.
+     */
+    private fun rememberWhatItRead(playerId: String) {
+        if (playerId in beforeScenario) return
+        beforeScenario[playerId] = adminVolumeOf(playerId) ?: 0
     }
 
     /** The label of the player the step names, first or second. */
@@ -136,8 +175,8 @@ class PlayerVolumeSteps {
         /** How long the app takes to read the list again on its own. */
         const val SETTLE_MILLIS = 3_000L
 
-        /** What a drag to the end of the slider should read. */
-        const val HIGH_VOLUME = 80
+        /** How far a nudge moves along the track, as a share of it. */
+        const val NUDGE = 0.1f
 
         /** How long a drag on a slider takes, like a hand would. */
         const val DRAG_MILLIS = 1_200

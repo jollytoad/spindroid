@@ -67,6 +67,16 @@ Feature: The two-card sender screen
     And "Tidal" stays picked on the Source card
 
   @requires-music-assistant
+  Scenario: A destination pick without a source says what it waits for
+    Given "Sign in" is chosen
+    And the sign in form is filled with the Music Assistant account
+    And "Sign in" is pressed
+    And the app is signed into Music Assistant
+    And the phone holds no media session
+    When the first player is picked on the Destination card
+    Then the Destination card says the stream waits for a source
+
+  @requires-music-assistant
   @followpick
   Scenario: The source side of the stream
     Given the stream sends Tidal's audio to the first player
