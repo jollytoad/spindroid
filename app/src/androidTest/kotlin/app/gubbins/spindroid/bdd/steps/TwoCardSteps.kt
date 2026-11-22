@@ -87,6 +87,11 @@ class TwoCardSteps {
         TestSession.release()
         SessionApps.resetDiscards()
         SessionApps.forgetPick()
+        // The drops of the players live in the screen's own manager, so
+        // the reset runs through the screen: a swipe from a scenario
+        // that failed midway must hide no row here, and the store that
+        // carries the drops across a restart resets with it.
+        composeRule.activity.forgetPlayerDiscards()
     }
 
     @Given("no media app holds a session")

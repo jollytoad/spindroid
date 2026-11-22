@@ -59,9 +59,9 @@ import app.gubbins.spindroid.mass.playerIconOf
  * row carries the stop for it. Every row carries a slider that reads
  * the loudness of its player, and a drag on the slider sets it. The
  * Show all players control at the bottom right reads the list again
- * and forgets every drop, so a swipe aside hides a row only until it
- * runs. The row that carries the pick refuses the swipe, the way a
- * session row does on the Source card.
+ * and forgets every drop, so it is the one control that brings a
+ * swiped row back. The row that carries the pick refuses the swipe,
+ * the way a session row does on the Source card.
  */
 @Composable
 internal fun DestinationCard(
@@ -191,8 +191,9 @@ internal fun DestinationCard(
             }
             if (signedIn) {
                 // The list exists only with an account, so the control
-                // sits with it. Each run forgets the drops, the way the
-                // show-all control of the Source card does.
+                // sits with it. It is the one control that forgets the
+                // drops, the way the show-all control of the Source
+                // card does.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,

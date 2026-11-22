@@ -9,6 +9,7 @@ import app.gubbins.mass.SelectSourceResult
 import app.gubbins.sendspin.crypto.Base64Url
 import app.gubbins.sendspin.crypto.X25519
 import app.gubbins.spindroid.session.SessionStateHolder
+import app.gubbins.spindroid.storage.Discards
 import app.gubbins.spindroid.storage.EncryptedKeyStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,8 +42,19 @@ class MassPlayerManager(
     private val accounts: MassAccountManager,
 ) {
     private val keys = EncryptedKeyStore(context)
+
+    /**
+     * The players a swipe hid, kept between runs of the app.
+     *
+     * The manager is made anew with every screen, so the store is where
+     * the drops live across a restart or a turn of the screen: the set
+     * arrives with the state below, and the show-all control is the
+     * only thing that clears it.
+     */
+    private val keptDiscards = Discards(context)
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val mutableState = MutableStateFlow(MassPlayerState())
+    private val mutableState = MutableStateFlow(MassPlayerState(discarded = keptDiscards.players))
 
     /** The state of the picker. */
     val state: StateFlow<MassPlayerState> = mutableState.asStateFlow()
@@ -133,28 +145,53 @@ class MassPlayerManager(
     /**
      * Reads the list again, and forgets every drop.
      *
-     * The refresh control beside the card title is the one view of
-     * every player the server offers, so each run forgets the drops,
-     * the way the finder of the Source card does: the players a swipe
-     * hid come back, and the card holds the whole answer of the server
-     * again. The reads the app makes on its own keep the drops, so a
-     * row a swipe hid stays away while the app reads after a choice.
+     * The show-all control at the bottom right of the card is the one
+     * view of every player the server offers, so each run forgets the
+     * drops, in the card and in the store. The reads the app makes on
+     * its own keep the drops, so a row a swipe hid stays hidden while
+     * the app reads after a choice, after a restart, and after a turn
+     * of the screen.
      */
     fun refreshAll() {
+        keptDiscards.players = emptySet()
         publish(mutableState.value.copy(discarded = emptySet()))
         refresh()
     }
 
-    /** Hides one player from the list, until the refresh control runs. */
+    /** Hides one player from the list, until the show-all control runs. */
     fun discard(playerId: String) {
         val state = mutableState.value
         val dropped = state.discarded + playerId
+        keptDiscards.players = dropped
         publish(
             state.copy(
                 discarded = dropped,
                 players = MassPlayerRules.visible(
                     state.allPlayers,
                     dropped,
+                    state.hiddenUnavailable,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Forgets every drop, in the card and in the store.
+     *
+     * The BDD harness calls this between scenarios, so a swipe from a
+     * scenario that failed midway hides no row from the ones that
+     * follow. The call reads nothing from the server: the rows come
+     * back from the list the card already holds.
+     */
+    fun clearDiscards() {
+        keptDiscards.players = emptySet()
+        val state = mutableState.value
+        publish(
+            state.copy(
+                discarded = emptySet(),
+                players = MassPlayerRules.visible(
+                    state.allPlayers,
+                    emptySet(),
                     state.hiddenUnavailable,
                 ),
             ),

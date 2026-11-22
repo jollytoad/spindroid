@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.util.Log
+import app.gubbins.spindroid.storage.Discards
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -203,31 +204,60 @@ object SessionApps {
     }
 
     /**
+     * The drops the user made, kept between runs of the app.
+     *
+     * The store holds the packages a swipe hid, so a restart of the app
+     * or a turn of the screen loses none of them. The store arrives with
+     * the start of the reading, because the object holds no context
+     * before that.
+     */
+    private var discards: Discards? = null
+
+    /**
      * Runs the finder, and offers what it finds to the card.
      *
-     * The open of the app runs this, and the show-all control of the
-     * Source card runs it again. The finder is the one view of every
-     * installed media app, so each run forgets the drops: the apps a
-     * swipe hid come back, and the card holds the whole answer of the
-     * phone again. A swipe hides a row only until the next run of the
-     * finder.
+     * The open of the app runs this, and so does the listener binding.
+     * A run keeps the drops, because a swipe is a choice about the card
+     * and not about one reading: the apps a swipe hid stay hidden, and
+     * only the show-all control of the Source card brings them back.
      */
     fun runFinder() {
         val found = finder?.installedMediaApps() ?: return
         mutableOffers.value = found
-        mutableDiscarded.value = emptySet()
         refreshDisplay()
     }
 
-    /** Hides one app from the offers, until the finder runs again. */
+    /**
+     * Reads the finder, and brings back every app a swipe hid.
+     *
+     * The show-all control of the Source card calls this, and nothing
+     * else: it is the one view of every installed media app the user
+     * asked for, so the drops leave with it.
+     */
+    fun showAllApps() {
+        mutableDiscarded.value = emptySet()
+        discards?.apps = emptySet()
+        refreshDisplay()
+        runFinder()
+    }
+
+    /** Hides one app from the offers, until the show-all control runs. */
     fun discard(packageName: String) {
         mutableDiscarded.value = mutableDiscarded.value + packageName
+        discards?.apps = mutableDiscarded.value
         refreshDisplay()
     }
 
-    /** Forgets every hidden app. The test hook uses it to start clean. */
+    /**
+     * Forgets every hidden app, in the card and in the store.
+     *
+     * The test hook uses it to start clean, and a clean start means the
+     * store too: a hidden row from an earlier run must not outlive the
+     * hook that says the state is fresh.
+     */
     fun resetDiscards() {
         mutableDiscarded.value = emptySet()
+        discards?.apps = emptySet()
         refreshDisplay()
     }
 
@@ -246,6 +276,11 @@ object SessionApps {
     fun start(appContext: Context) {
         stop()
         context = appContext
+        discards = Discards(appContext)
+        // The drops survive the restart, so they come back here before
+        // the first offer lands: the finder keeps them, and the show-all
+        // control is the only thing that clears them.
+        mutableDiscarded.value = discards?.apps ?: emptySet()
         manager = appContext.getSystemService(MediaSessionManager::class.java)
         finder = InstalledMediaApps(appContext)
         val changed = MediaSessionManager.OnActiveSessionsChangedListener {
@@ -263,7 +298,8 @@ object SessionApps {
         read(appContext)
         // The open of the app shows every installed media app on its
         // own, so the finder runs here. The show-all control of the
-        // Source card runs it again, and each run forgets the drops.
+        // Source card runs it again, and a run keeps the drops: the
+        // rows a swipe hid stay hidden until the control clears them.
         runFinder()
     }
 
@@ -292,6 +328,7 @@ object SessionApps {
         mutableAccessMissing.value = false
         mutableOffers.value = emptyList()
         mutableDiscarded.value = emptySet()
+        discards = null
         finder = null
         refreshDisplay()
         context = null
@@ -316,8 +353,8 @@ object SessionApps {
      * The rows the Source card carries: the sessions and the finder offers.
      *
      * The offers join the sessions in the alphabetical order, and an
-     * offer a swipe hid stays away until the finder runs again, which
-     * forgets every drop. An offer whose app holds a session
+     * offer a swipe hid stays away until the show-all control runs,
+     * which forgets every drop. An offer whose app holds a session
      * leaves, because the session row already speaks for that app, and
      * one row per app keeps the card honest. The package is the
      * identity the merge trusts first, because a service label can

@@ -6,14 +6,15 @@ import org.junit.jupiter.api.Test
 /**
  * The rule the finder follows with the drops.
  *
- * The finder is the one view of every installed media app, so a swipe
- * hides a row only until the next run of the finder: each run forgets
- * the drops and offers the whole phone again.
+ * A swipe is a choice about the card, so every run of the finder keeps
+ * the drops: the rows a swipe hid stay hidden. Only the show-all
+ * control forgets them, because it is the one view of every installed
+ * media app the user asked for.
  */
 class SessionAppsFinderTest {
 
     @Test
-    fun `the finder forgets the drops and shows every app again`() {
+    fun `the finder keeps the drops and the show-all control forgets them`() {
         SessionApps.offerInstalled("Radio", "Mellow")
         SessionApps.runFinder()
         SessionApps.discard("radio")
@@ -21,8 +22,12 @@ class SessionAppsFinderTest {
             "The swipe must hide the row, which gives ${SessionApps.apps.value.map { it.label }}."
         }
         SessionApps.runFinder()
+        check(SessionApps.apps.value.map { it.label } == listOf("Mellow")) {
+            "A run of the finder must keep the drop, which gives ${SessionApps.apps.value.map { it.label }}."
+        }
+        SessionApps.showAllApps()
         check(SessionApps.apps.value.map { it.label } == listOf("Mellow", "Radio")) {
-            "The finder must offer every app again, which gives ${SessionApps.apps.value.map { it.label }}."
+            "The show-all control must offer every app again, which gives ${SessionApps.apps.value.map { it.label }}."
         }
         SessionApps.resetDiscards()
     }

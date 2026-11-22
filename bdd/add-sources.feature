@@ -4,8 +4,10 @@ Feature: Add sources to the card
   The Source card lists the apps that hold a media session. The open
   of the app reads the installed media apps on its own, and merges
   them into the list as dimmed rows, in the alphabetical order. The
-  Show all media apps control reads them again, and every run forgets
-  the rows a swipe dropped. A tap on a discovered row opens the app
+  Show all media apps control reads them again, and it is the one run
+  that forgets the rows a swipe dropped: every other run keeps them,
+  so a swipe holds across a restart of the app and a turn of the
+  screen. A tap on a discovered row opens the app
   and picks it, so the pick waits for the app to play, and no pick
   ever pulls an app to the front on its own.
 

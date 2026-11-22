@@ -46,7 +46,7 @@ object MassPlayerRules {
      * The rows the card shows: the targets, without the ones a swipe
      * hid and the ones the last load skipped.
      *
-     * A swipe hides a row only until the refresh control runs, which
+     * A swipe hides a row only until the show-all control runs, which
      * forgets every drop, so the card holds the whole answer of the
      * server again. An unavailable player reads the same way: the load
      * skips it, and the next load reads the list again.

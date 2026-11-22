@@ -253,7 +253,7 @@ class MainActivity : ComponentActivity() {
                     onAllowSessionAccess = { openNotificationAccess() },
                     sessionAccessMayBeRestricted = accessMayBeRestricted,
                     onOpenSessionAppInfo = { openAppInfo() },
-                    onOpenFinder = { SessionApps.runFinder() },
+                    onOpenFinder = { SessionApps.showAllApps() },
                     onDiscard = { packageName -> SessionApps.discard(packageName) },
                     onSessionPlay = { packageName -> SessionApps.play(packageName) },
                     onSessionPause = { packageName -> SessionApps.pause(packageName) },
@@ -329,6 +329,17 @@ class MainActivity : ComponentActivity() {
         val playerId = pickedPlayerId ?: return false
         players.nudgeVolume(playerId, step)
         return true
+    }
+
+    /**
+     * Forgets the players a swipe hid, in the card and in the store.
+     *
+     * The BDD harness calls this between scenarios, the way it calls
+     * the resets of the session list: a swipe from a scenario that
+     * failed midway must not hide a row from the ones that follow.
+     */
+    fun forgetPlayerDiscards() {
+        players.clearDiscards()
     }
 
     override fun onDestroy() {

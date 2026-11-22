@@ -123,3 +123,16 @@ Feature: The two-card sender screen
     Then the Destination card no longer lists the second player
     When Show all players is chosen
     Then the Destination card lists the second player again
+
+  @requires-music-assistant
+  Scenario: A swipe holds across a turn of the screen
+    Given "Sign in" is chosen
+    And the sign in form is filled with the Music Assistant account
+    And "Sign in" is pressed
+    And the app is signed into Music Assistant
+    When the second player row is swiped aside
+    Then the Destination card no longer lists the second player
+    When the phone is turned to landscape
+    Then the Destination card no longer lists the second player
+    When Show all players is chosen
+    Then the Destination card lists the second player again

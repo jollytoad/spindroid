@@ -51,7 +51,8 @@ import app.gubbins.spindroid.capture.SessionApps
  * The rows read alphabetically: the apps that hold a media session,
  * each with the transport buttons of its session, and the dimmed rows
  * of the installed media apps, which the open of the app reads on its
- * own. The show-all control at the bottom right reads them again. The
+ * own. The show-all control at the bottom right reads them again, and
+ * it is the one control that brings a swiped row back. The
  * pick chooses the one app whose audio the capture should follow.
  */
 @Composable
@@ -359,7 +360,7 @@ private fun drawableToBitmap(drawable: Drawable, sizePx: Int): Bitmap {
  * One app that the finder found, and that holds no session yet.
  *
  * The row is dimmed and carries no transport buttons. A swipe to the
- * left drops it from the list until the next run of the finder: the
+ * left drops it from the list until the show-all control runs: the
  * shared swipe box drives the gesture, and the row shrinks and fades
  * away, so the rows under it rise in step with the collapse. The
  * model drops the row only once the collapse has settled. A tap on

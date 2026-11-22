@@ -3,6 +3,7 @@ package app.gubbins.spindroid.bdd.support
 import androidx.test.platform.app.InstrumentationRegistry
 import app.gubbins.spindroid.mass.MassAccountManager
 import app.gubbins.spindroid.mass.MassPlayerManager
+import app.gubbins.spindroid.mass.MassPlayerRules
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -158,10 +159,19 @@ object ServerPlayers {
             picker.refresh()
             val state = runBlocking {
                 withTimeoutOrNull(TIMEOUT_MILLIS) {
-                    picker.state.first { it.players.isNotEmpty() }
+                    picker.state.first { it.allPlayers.isNotEmpty() }
                 }
             } ?: return null
-            val player = state.players.getOrNull(index) ?: return null
+            // The steps name the players the server offers, not the
+            // ones the card shows: a scenario may swipe a row and still
+            // need its name a step later, so the read applies no drops
+            // and skips nothing a swipe hid.
+            val rows = MassPlayerRules.visible(
+                state.allPlayers,
+                emptySet(),
+                MassPlayerRules.unavailableAtLoad(state.allPlayers),
+            )
+            val player = rows.getOrNull(index) ?: return null
             return if (label) player.label else player.playerId
         } catch (exception: IllegalStateException) {
             return null
