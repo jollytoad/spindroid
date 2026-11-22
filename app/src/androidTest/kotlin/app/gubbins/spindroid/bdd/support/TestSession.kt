@@ -1,6 +1,9 @@
 package app.gubbins.spindroid.bdd.support
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
@@ -95,10 +98,77 @@ object TestSession {
         onMain { releaseNow() }
     }
 
+    /**
+     * The tone that makes real sound on the phone.
+     *
+     * The session alone makes no sound, so the checks that read what
+     * the capture carries need a voice. The tone belongs to the test
+     * process, which the app sees as the picked session, so the
+     * capture follows it the way it follows a real music app.
+     */
+    private var toneTrack: AudioTrack? = null
+
+    /**
+     * Plays a steady tone, or stops it.
+     *
+     * The tone loops until [tone] turns it off. It plays through the
+     * media usage, so the capture of the system audio takes it in.
+     */
+    fun tone(on: Boolean) {
+        onMain {
+            if (!on) {
+                toneTrack?.run {
+                    stop()
+                    release()
+                }
+                toneTrack = null
+                return@onMain
+            }
+            if (toneTrack != null) return@onMain
+            val rate = TONE_RATE
+            // Two seconds of a plain sine, played in a loop, so the
+            // sound stays steady while the checks read the level.
+            val samples = ShortArray(rate * TONE_SECONDS) { index ->
+                (Math.sin(2.0 * Math.PI * TONE_HERTZ * index / rate) * Short.MAX_VALUE * 0.8)
+                    .toInt().toShort()
+            }
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build(),
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(rate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build(),
+                )
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .setBufferSizeInBytes(samples.size * 2)
+                .build()
+            track.write(samples, 0, samples.size)
+            track.setLoopPoints(0, samples.size, -1)
+            track.play()
+            toneTrack = track
+        }
+    }
+
     private fun releaseNow() {
         sessionMedia?.release()
         sessionMedia = null
     }
+
+    /** The pitch of the tone, in hertz. */
+    private const val TONE_HERTZ = 440.0
+
+    /** The rate of the tone, in samples per second. */
+    private const val TONE_RATE = 48_000
+
+    /** The length of the tone buffer, in seconds. */
+    private const val TONE_SECONDS = 2
 
     /** Whether the session plays right now. */
     fun isPlaying(): Boolean {

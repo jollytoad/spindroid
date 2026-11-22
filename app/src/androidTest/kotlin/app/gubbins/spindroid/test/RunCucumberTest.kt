@@ -9,7 +9,7 @@ import io.cucumber.junit.CucumberOptions
  * feature files are assets of the test APK, so they never ship with the app.
  */
 @CucumberOptions(
-    features = ["source.feature", "two-card-sender.feature", "add-sources.feature"],
+    features = ["source.feature", "two-card-sender.feature", "add-sources.feature", "phone-volume.feature"],
     glue = ["app.gubbins.spindroid.bdd"],
 )
 class RunCucumberTest

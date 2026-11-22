@@ -94,20 +94,40 @@ class MassPlayerManager(
                 MusicAssistantClient(serverUrl).listPlayers(token)
             }
             when (result) {
-                is PlayersResult.Success -> publish(
-                    mutableState.value.copy(
-                        loading = false,
-                        error = null,
-                        players = MassPlayerRules.visible(result.players, mutableState.value.discarded),
-                        allPlayers = result.players,
-                    ),
-                )
+                is PlayersResult.Success -> publishRead(result.players, recomputeHidden = true)
 
                 is PlayersResult.Failure -> publish(
                     mutableState.value.copy(loading = false, error = result.reason),
                 )
             }
         }
+    }
+
+    /**
+     * Publishes one read of the player list.
+     *
+     * Every load reads the list again, so it recomputes the players it
+     * skips: a player that reads available returns, and one that reads
+     * unavailable goes, the way a swipe would take it. The watch calls
+     * this with its own flag instead, because the watch only refreshes
+     * what the rows show — a player that turned unavailable after the
+     * load keeps its row, and the row says so.
+     */
+    private fun publishRead(players: List<MassPlayer>, recomputeHidden: Boolean) {
+        val hidden = if (recomputeHidden) {
+            MassPlayerRules.unavailableAtLoad(players)
+        } else {
+            mutableState.value.hiddenUnavailable
+        }
+        publish(
+            mutableState.value.copy(
+                loading = false,
+                error = null,
+                players = MassPlayerRules.visible(players, mutableState.value.discarded, hidden),
+                allPlayers = players,
+                hiddenUnavailable = hidden,
+            ),
+        )
     }
 
     /**
@@ -132,9 +152,102 @@ class MassPlayerManager(
         publish(
             state.copy(
                 discarded = dropped,
-                players = MassPlayerRules.visible(state.allPlayers, dropped),
+                players = MassPlayerRules.visible(
+                    state.allPlayers,
+                    dropped,
+                    state.hiddenUnavailable,
+                ),
             ),
         )
+    }
+
+    /**
+     * Sets the volume of one player.
+     *
+     * The row moves first, so the slider answers the hand at once. The
+     * server answers with nothing either way, so the watch confirms on
+     * its own clock, and a refusal says so in the error.
+     *
+     * @param playerId the player whose volume changes
+     * @param volumeLevel the new loudness, from 0 to 100
+     */
+    fun setVolume(playerId: String, volumeLevel: Int) {
+        val level = volumeLevel.coerceIn(0, 100)
+        publish(
+            mutableState.value.copy(
+                players = withLevel(mutableState.value.players, playerId, level),
+                allPlayers = withLevel(mutableState.value.allPlayers, playerId, level),
+            ),
+        )
+        val token = accounts.token ?: return
+        val serverUrl = accounts.state.value.serverUrl
+        if (serverUrl.isBlank()) return
+        scope.launch {
+            val reason = withContext(Dispatchers.IO) {
+                MusicAssistantClient(serverUrl).setVolume(token, playerId, level)
+            }
+            if (reason != null) {
+                Log.i(TAG, "The volume of $playerId did not go: $reason")
+                publish(mutableState.value.copy(error = reason))
+            }
+        }
+    }
+
+    /**
+     * Moves the volume of one player by one step, within its range.
+     *
+     * @param playerId the player whose volume changes
+     * @param step how far the volume moves, up or down
+     */
+    fun nudgeVolume(playerId: String, step: Int) {
+        val now = mutableState.value.allPlayers
+            .firstOrNull { it.playerId == playerId }
+            ?.volumeLevel
+            ?: 0
+        setVolume(playerId, now + step)
+    }
+
+    /** The list with one player's volume replaced. */
+    private fun withLevel(players: List<MassPlayer>, playerId: String, level: Int): List<MassPlayer> =
+        players.map { player ->
+            if (player.playerId == playerId) player.copy(volumeLevel = level) else player
+        }
+
+    /**
+     * The coroutine that keeps the rows fresh while the screen is in
+     * front.
+     */
+    private var watcher: Job? = null
+
+    /**
+     * Follows the players of the server while the screen is in front.
+     *
+     * The watch reads the list again and again, so a volume that
+     * changes elsewhere — in the Music Assistant app, or by a voice
+     * command — moves the sliders here within moments. The watch is not
+     * a load: it never drops a row, so a player that turned
+     * unavailable keeps its row and the note that says so.
+     *
+     * @param on whether the screen is in front
+     */
+    fun watch(on: Boolean) {
+        watcher?.cancel()
+        watcher = null
+        if (!on) return
+        watcher = scope.launch {
+            while (isActive) {
+                delay(WATCH_PERIOD_MILLIS)
+                val token = accounts.token ?: continue
+                val serverUrl = accounts.state.value.serverUrl
+                if (serverUrl.isBlank()) continue
+                val result = withContext(Dispatchers.IO) {
+                    MusicAssistantClient(serverUrl).listPlayers(token)
+                }
+                if (result is PlayersResult.Success) {
+                    publishRead(result.players, recomputeHidden = false)
+                }
+            }
+        }
     }
 
     /**
@@ -282,14 +395,15 @@ class MassPlayerManager(
                     mutableState.value.copy(choosing = null, error = players.reason),
                 )
 
-                is PlayersResult.Success -> publish(
-                    mutableState.value.copy(
-                        choosing = null,
-                        error = errorOf(playerId, players.players),
-                        players = MassPlayerRules.visible(players.players, mutableState.value.discarded),
-                        allPlayers = players.players,
-                    ),
-                )
+                is PlayersResult.Success -> {
+                    publishRead(players.players, recomputeHidden = true)
+                    publish(
+                        mutableState.value.copy(
+                            choosing = null,
+                            error = errorOf(playerId, players.players),
+                        ),
+                    )
+                }
             }
         }
     }
@@ -378,6 +492,7 @@ class MassPlayerManager(
     /** Stops the work that is running. */
     fun close() {
         router?.cancel()
+        watcher?.cancel()
         scope.cancel()
     }
 
@@ -428,5 +543,8 @@ class MassPlayerManager(
          * player tells the server about it a moment later.
          */
         const val SETTLE_MILLIS = 500L
+
+        /** How long the watch sleeps between two reads of the list. */
+        const val WATCH_PERIOD_MILLIS = 2_000L
     }
 }

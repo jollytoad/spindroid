@@ -30,6 +30,7 @@ public class MusicAssistantClient(
     private val playersAllAdapter = moshi.adapter(PlayersAllRequest::class.java)
     private val selectSourceAdapter = moshi.adapter(SelectSourceRequest::class.java)
     private val playerCommandAdapter = moshi.adapter(PlayerCommandRequest::class.java)
+    private val volumeSetAdapter = moshi.adapter(VolumeSetRequest::class.java)
     private val playerSetupAdapter = moshi.adapter(PlayerSetupRequest::class.java)
     private val flowIdAdapter = moshi.adapter(FlowIdRequest::class.java)
     private val flowSubmitAdapter = moshi.adapter(FlowSubmitRequest::class.java)
@@ -187,6 +188,34 @@ public class MusicAssistantClient(
      */
     public fun playPlayer(token: String, playerId: String): String? =
         playerCommand(token, playerId, "play")
+
+    /**
+     * Sets the volume of one player.
+     *
+     * The server answers with nothing when the command did what it was
+     * asked. It also answers with nothing when it did not.
+     *
+     * @param token the token of the signed in account
+     * @param playerId the player whose volume changes
+     * @param volumeLevel the new loudness of the player, from 0 to 100
+     * @return nothing, or the reason the server gave
+     */
+    public fun setVolume(token: String, playerId: String, volumeLevel: Int): String? {
+        val request = VolumeSetRequest(
+            messageId = UUID.randomUUID().toString(),
+            command = COMMAND_PLAYER_COMMAND + "volume_set",
+            args = VolumeSetArgs(playerId = playerId, volumeLevel = volumeLevel),
+        )
+        val body = volumeSetAdapter.toJson(request).toByteArray(Charsets.UTF_8)
+        return try {
+            post(body, token)
+            null
+        } catch (exception: ApiException) {
+            "Music Assistant refused the command: ${exception.reason}"
+        } catch (exception: IOException) {
+            "Music Assistant did not answer: ${exception.message}"
+        }
+    }
 
     /**
      * Starts the setup flow of a player.

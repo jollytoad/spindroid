@@ -17,20 +17,28 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import app.gubbins.mass.MassPlayer
 import app.gubbins.spindroid.R
 import app.gubbins.spindroid.mass.DiscoveredServer
@@ -47,11 +55,12 @@ import app.gubbins.spindroid.mass.playerIconOf
  * sign in, the card also lists the players, and the row pick sends the
  * audio of the phone to the one player it names; the pick that lands
  * last starts the stream on its own. While the stream runs, the picked
- * row carries the stop for it. The Show all players control at the
- * bottom right reads the list again and forgets every drop, so a
- * swipe aside hides a row only until it runs. The row that carries the
- * pick refuses the swipe, the way a session row does on the Source
- * card.
+ * row carries the stop for it. Every row carries a slider that reads
+ * the loudness of its player, and a drag on the slider sets it. The
+ * Show all players control at the bottom right reads the list again
+ * and forgets every drop, so a swipe aside hides a row only until it
+ * runs. The row that carries the pick refuses the swipe, the way a
+ * session row does on the Source card.
  */
 @Composable
 internal fun DestinationCard(
@@ -67,6 +76,7 @@ internal fun DestinationCard(
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onPick: (String) -> Unit,
+    onVolume: (String, Int) -> Unit,
     onDiscard: (String) -> Unit,
     onRefresh: () -> Unit,
     onStop: () -> Unit,
@@ -132,6 +142,7 @@ internal fun DestinationCard(
                                         busy = players.choosing == player.playerId,
                                         canPick = player.available,
                                         onPick = { onPick(player.playerId) },
+                                        onVolume = { volume -> onVolume(player.playerId, volume) },
                                         onStop = if (running) onStop else null,
                                     )
                                 } else {
@@ -147,6 +158,7 @@ internal fun DestinationCard(
                                             busy = players.choosing == player.playerId,
                                             canPick = player.available,
                                             onPick = { onPick(player.playerId) },
+                                            onVolume = { volume -> onVolume(player.playerId, volume) },
                                             onStop = null,
                                         )
                                     }
@@ -262,7 +274,9 @@ private fun ServerRow(
  * names the kind of the player the way the server sees it. Tapping
  * anywhere on the row sends the audio of the phone to this player.
  * While the stream runs, the picked row carries the stop for it at
- * its trailing edge. The row serves as the face of the swipe box on
+ * its trailing edge. The slider under the row reads the loudness of
+ * the player, and a drag on it sets the loudness, the way the Music
+ * Assistant app would. The row serves as the face of the swipe box on
  * the rows that a swipe can drop.
  */
 @Composable
@@ -275,70 +289,110 @@ private fun PlayerRow(
     busy: Boolean,
     canPick: Boolean,
     onPick: () -> Unit,
+    onVolume: (Int) -> Unit,
     onStop: (() -> Unit)?,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                if (picked) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                },
-                RoundedCornerShape(28.dp),
-            )
-            // The fill rides the tint of the pick, and a row that is
-            // not picked carries no stream, so it stays flat.
-            .levelFill(if (picked) level else 0f)
-            .clickable(
-                enabled = canPick && !busy,
-                onClickLabel = stringResource(R.string.players_send),
-                role = Role.RadioButton,
-                onClick = onPick,
-            )
-            // The row is its own selection control, the way a source row
-            // is: the clickable above gives the row its action, and this
-            // gives it the state the pick reads.
-            .semantics { selected = picked }
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            imageVector = playerIconOf(player.icon),
-            contentDescription = null,
-            modifier = Modifier.size(GlyphSize),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = player.label,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (picked) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    RoundedCornerShape(28.dp),
                 )
-                if (live) {
-                    PlayingBars(description = stringResource(R.string.bars_live_output))
+                // The fill rides the tint of the pick, and a row that is
+                // not picked carries no stream, so it stays flat.
+                .levelFill(if (picked) level else 0f)
+                .clickable(
+                    enabled = canPick && !busy,
+                    onClickLabel = stringResource(R.string.players_send),
+                    role = Role.RadioButton,
+                    onClick = onPick,
+                )
+                // The row is its own selection control, the way a source row
+                // is: the clickable above gives the row its action, and this
+                // gives it the state the pick reads.
+                .semantics { selected = picked }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = playerIconOf(player.icon),
+                contentDescription = null,
+                modifier = Modifier.size(GlyphSize),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = player.label,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (live) {
+                        PlayingBars(description = stringResource(R.string.bars_live_output))
+                    }
+                }
+                noteOf(player, names)?.let { note ->
+                    Text(text = note, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            noteOf(player, names)?.let { note ->
-                Text(text = note, style = MaterialTheme.typography.bodySmall)
+            onStop?.let { stop ->
+                // The circle matches the transport buttons of the Source
+                // card, so every round control on a row reads as one family.
+                OutlinedIconButton(onClick = stop) {
+                    Icon(
+                        imageVector = Icons.Rounded.Stop,
+                        contentDescription = stringResource(R.string.stop_stream),
+                    )
+                }
             }
         }
-        onStop?.let { stop ->
-            // The circle matches the transport buttons of the Source
-            // card, so every round control on a row reads as one family.
-            OutlinedIconButton(onClick = stop) {
-                Icon(
-                    imageVector = Icons.Rounded.Stop,
-                    contentDescription = stringResource(R.string.stop_stream),
-                )
-            }
-        }
+        VolumeLine(player = player, onVolume = onVolume)
     }
+}
+
+/**
+ * The slider that reads and sets the loudness of one player.
+ *
+ * The slider holds the value the server told, and the watch moves it
+ * when the loudness changes elsewhere, so the line always reads the
+ * truth of the player. A drag keeps its own value until the hand lets
+ * go, and the commit goes out only then. The description names the
+ * player, because a screen reader meets one slider per row and the
+ * label of the row alone does not say which player a slider moves.
+ */
+@Composable
+private fun VolumeLine(player: MassPlayer, onVolume: (Int) -> Unit) {
+    // The server wins whenever it speaks and no hand holds the slider,
+    // so the remembered value keys on the loudness the server told.
+    var drag by remember(player.playerId, player.volumeLevel) { mutableStateOf<Float?>(null) }
+    val shown = drag ?: (player.volumeLevel ?: 0) / 100f
+    val context = LocalContext.current
+    Slider(
+        value = shown,
+        onValueChange = { drag = it },
+        onValueChangeFinished = {
+            drag?.let { value -> onVolume((value * 100).roundToInt()) }
+            drag = null
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .semantics {
+                contentDescription = context.getString(
+                    R.string.players_volume,
+                    player.label,
+                )
+            },
+    )
 }
 
 /**

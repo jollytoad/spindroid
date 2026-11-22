@@ -50,6 +50,7 @@
     <string name="players_loading">Reading the players from the server…</string>
     <string name="players_none">The server has no player that can play sound.</string>
     <string name="players_not_available">Not available</string>
+    <string name="players_volume">Volume of %1$s</string>
     <string name="players_not_live">The phone is not connected to the server, so it has no sound to send yet. Pick a source and a player, and the stream starts on its own.</string>
     <string name="players_send">send the audio of the phone to this player</string>
     <string name="show_all_players">Show all players</string>

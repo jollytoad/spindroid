@@ -22,6 +22,7 @@ import app.gubbins.spindroid.capture.SystemAudioCapture
 import app.gubbins.spindroid.discovery.DeviceName
 import app.gubbins.spindroid.discovery.ServiceAdvertiser
 import app.gubbins.spindroid.net.InboundServer
+import app.gubbins.spindroid.quiet.PhoneQuiet
 import app.gubbins.spindroid.session.PairingServiceHolder
 import app.gubbins.spindroid.session.SessionStateHolder
 import app.gubbins.spindroid.storage.EncryptedKeyStore
@@ -145,6 +146,7 @@ class SpindroidService : Service() {
         CaptureStatusHolder.publishRunning(true)
         CaptureStatusHolder.publishError(null)
         inboundServer?.swapCapture(captureSource)
+        quietThePhone()
         Log.i(TAG, "The paired listener took the real capture")
         return null
     }
@@ -175,6 +177,7 @@ class SpindroidService : Service() {
         capture = captureSource
         CaptureStatusHolder.publishRunning(true)
         CaptureStatusHolder.publishError(null)
+        quietThePhone()
 
         startListening(captureSource)
     }
@@ -288,8 +291,24 @@ class SpindroidService : Service() {
         pairing = false
         PairingServiceHolder.reset()
         publishRunning(false)
+        // The phone went quiet for the stream, so it comes back here,
+        // on every road that ends the stream: the row stop, the
+        // notification, a sign out, or the system taking the service
+        // down. The call is a no-op when the phone was never muted.
+        PhoneQuiet.end(this)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    /**
+     * Quiets the phone for the capture that just started.
+     *
+     * The call is safe on every road that starts the capture, because
+     * the call goes home without a change when the phone already
+     * reads zero or a stream already holds it quiet.
+     */
+    private fun quietThePhone() {
+        PhoneQuiet.begin(this)
     }
 
     /** Puts the service in the foreground, with the type the capture needs. */

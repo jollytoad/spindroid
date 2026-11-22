@@ -78,6 +78,22 @@ object ServerPlayers {
     }
 
     /**
+     * The identifier of the second player the server offers.
+     *
+     * @throws IllegalStateException when the server lists no player in time
+     */
+    fun secondId(): String {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val deadline = System.currentTimeMillis() + TIMEOUT_MILLIS
+        while (System.currentTimeMillis() < deadline) {
+            val id = tryOne(context, label = false, index = 1)
+            if (id != null) return id
+            Thread.sleep(RETRY_MILLIS)
+        }
+        error("The server listed no player at 1 within ${TIMEOUT_MILLIS / 1000} seconds.")
+    }
+
+    /**
      * Whether the server points any player at the phone.
      *
      * The server changes the player on its own clock, so the answer is a

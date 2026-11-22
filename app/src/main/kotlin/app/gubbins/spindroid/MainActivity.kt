@@ -9,6 +9,7 @@ import android.util.Log
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
@@ -59,10 +60,21 @@ class MainActivity : ComponentActivity() {
 
         /** How often the app tries to start the picked player. */
         const val ROUTE_ATTEMPTS = 10
+
+        /** How far one press of a volume key moves the loudness. */
+        const val VOLUME_STEP = 5
     }
 
     /** The message the app shows under the fields. */
     private var message by mutableStateOf<String?>(null)
+
+    /**
+     * The player that the screen picked, as a plain field.
+     *
+     * The volume keys arrive outside the composition, so the pick
+     * travels here from the tap handler that sets the compose state.
+     */
+    private var pickedPlayerId: String? = null
 
     /**
      * Whether the phone may answer the notification access toggle with
@@ -178,6 +190,12 @@ class MainActivity : ComponentActivity() {
             // server. The server learns it when the pick starts the stream.
             var playerPick by rememberSaveable { mutableStateOf<String?>(null) }
 
+            // The volume keys drive the picked player, and they arrive
+            // outside the composition, so the pick travels to a plain
+            // field of the activity. The effect sees every write of the
+            // pick, including the one a restored screen makes.
+            LaunchedEffect(playerPick) { pickedPlayerId = playerPick }
+
             // The sign in form lives on a page of its own. The page closes
             // when the sign in works, and the main page shows the account
             // then.
@@ -245,6 +263,9 @@ class MainActivity : ComponentActivity() {
                         players.startRouting(playerId)
                         startStreamIfReady(pickedSession, playerId)
                     },
+                    onVolumePlayer = { playerId, volumeLevel ->
+                        players.setVolume(playerId, volumeLevel)
+                    },
                     onDiscardPlayer = { playerId -> players.discard(playerId) },
                     onRefreshPlayers = { players.refreshAll() },
 
@@ -275,6 +296,39 @@ class MainActivity : ComponentActivity() {
         // change event, and the card must not hold the stale rows
         // until the next change.
         SessionApps.reread()
+        // The sliders follow the players while the app is in front, so
+        // a change made elsewhere reads here within moments. Behind the
+        // app, no one reads the sliders, so the reads stop.
+        players.watch(true)
+    }
+
+    override fun onPause() {
+        players.watch(false)
+        super.onPause()
+    }
+
+    /**
+     * The volume keys drive the picked player while the app is in
+     * front.
+     *
+     * The keys belong to the screen that holds the focus, so they reach
+     * no other app: in Tidal or anywhere else, they work as they always
+     * did. The keys never move the phone's own volume here, so the
+     * system volume popup does not appear either — the slider of the
+     * picked row says what the keys did.
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean =
+        when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> volumeKey(step = +VOLUME_STEP)
+            KeyEvent.KEYCODE_VOLUME_DOWN -> volumeKey(step = -VOLUME_STEP)
+            else -> super.onKeyDown(keyCode, event)
+        }
+
+    /** Gives one volume key to the picked player, or passes it on. */
+    private fun volumeKey(step: Int): Boolean {
+        val playerId = pickedPlayerId ?: return false
+        players.nudgeVolume(playerId, step)
+        return true
     }
 
     override fun onDestroy() {

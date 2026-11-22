@@ -17,6 +17,8 @@ import com.squareup.moshi.JsonClass
  * @param icon the name of the Material Design icon that the server shows
  *   for the player, such as `speaker` or `cast`
  * @param available the player can be reached right now
+ * @param volumeLevel the loudness of the player, from 0 to 100, when the
+ *   server tells about it
  * @param enabled the player is turned on for the user
  * @param state what the player is doing, such as `idle` or `playing`
  * @param playbackState what the player is doing, in the older name
@@ -37,6 +39,7 @@ public data class MassPlayer(
     val provider: String? = null,
     val icon: String? = null,
     val available: Boolean = true,
+    @Json(name = "volume_level") val volumeLevel: Int? = null,
     val enabled: Boolean = true,
     val state: String? = null,
     @Json(name = "playback_state") val playbackState: String? = null,
@@ -121,4 +124,19 @@ internal data class PlayerCommandRequest(
     @Json(name = "message_id") val messageId: String,
     val command: String,
     val args: Map<String, String>,
+)
+
+/** The envelope of the command that sets the volume of a player. */
+@JsonClass(generateAdapter = true)
+internal data class VolumeSetRequest(
+    @Json(name = "message_id") val messageId: String,
+    val command: String,
+    val args: VolumeSetArgs,
+)
+
+/** The arguments of the command that sets the volume of a player. */
+@JsonClass(generateAdapter = true)
+internal data class VolumeSetArgs(
+    @Json(name = "player_id") val playerId: String,
+    @Json(name = "volume_level") val volumeLevel: Int,
 )

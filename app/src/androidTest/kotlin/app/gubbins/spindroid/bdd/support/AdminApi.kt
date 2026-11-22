@@ -106,6 +106,34 @@ object AdminApi {
     }
 
     /**
+     * Reads the volume of one player, straight from the server.
+     *
+     * @param playerId the identifier that [awaitPlayer] or the picker named
+     * @return the loudness the server reports, from 0 to 100, or null
+     *   when the server does not tell about it
+     */
+    fun volumeOf(serverUrl: String, token: String, playerId: String): Int? {
+        when (val result = MusicAssistantClient(serverUrl).listPlayers(token)) {
+            is PlayersResult.Success ->
+                return result.players.firstOrNull { it.playerId == playerId }?.volumeLevel
+
+            is PlayersResult.Failure -> error(result.reason)
+        }
+    }
+
+    /**
+     * Sets the volume of one player, the way an outside hand would.
+     *
+     * @param playerId the identifier that the picker named
+     * @param volumeLevel the loudness the player should read
+     */
+    fun setVolume(serverUrl: String, token: String, playerId: String, volumeLevel: Int) {
+        MusicAssistantClient(serverUrl).setVolume(token, playerId, volumeLevel)?.let { reason ->
+            error(reason)
+        }
+    }
+
+    /**
      * Removes the pairing of the phone from the server.
      *
      * The phone must be connected, because the server can only remove a

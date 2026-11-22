@@ -185,6 +185,50 @@ class MusicAssistantClientTest {
     }
 
     @Test
+    fun `the list of players carries the volume`() {
+        answers[MusicAssistantClient.COMMAND_PLAYERS_ALL] = Answer(
+            200,
+            """
+            [
+              {"player_id":"garage","name":"Garage","volume_level":56,"available":true},
+              {"player_id":"radio","name":"radio","volume_level":null,"available":false}
+            ]
+            """.trimIndent(),
+        )
+
+        val result = MusicAssistantClient(baseUrl).listPlayers("a-token")
+
+        assertTrue(result is PlayersResult.Success, "the list should arrive, it gave $result")
+        val players = (result as PlayersResult.Success).players
+        assertEquals(56, players[0].volumeLevel)
+        assertEquals(null, players[1].volumeLevel)
+    }
+
+    @Test
+    fun `the volume command carries the player and the level as a number`() {
+        answers["players/cmd/volume_set"] = Answer(200, "null")
+
+        val reason = MusicAssistantClient(baseUrl).setVolume("a-token", "garage", 55)
+
+        assertEquals(null, reason)
+        assertTrue(receivedBody.contains("\"command\":\"players/cmd/volume_set\""), "the body was $receivedBody")
+        assertTrue(receivedBody.contains("\"player_id\":\"garage\""), "the body was $receivedBody")
+        assertTrue(receivedBody.contains("\"volume_level\":55"), "the level must be a number, the body was $receivedBody")
+    }
+
+    @Test
+    fun `the volume command reports a refusal`() {
+        answers["players/cmd/volume_set"] = Answer(401, "Authentication required")
+
+        val reason = MusicAssistantClient(baseUrl).setVolume("a-token", "garage", 55)
+
+        assertEquals(
+            "Music Assistant refused the command: Authentication required",
+            reason,
+        )
+    }
+
+    @Test
     fun `the list of players carries the token`() {
         answers[MusicAssistantClient.COMMAND_PLAYERS_ALL] = Answer(200, "[]")
 

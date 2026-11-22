@@ -16,6 +16,9 @@ import app.gubbins.mass.MassPlayer
  *   while the routing runs; the row of this player carries the bars
  * @param discarded the players a swipe hid from the list, until the
  *   refresh control runs
+ * @param hiddenUnavailable the players the last load skipped, because
+ *   they read unavailable; the watch keeps this set, so a player that
+ *   turns unavailable after the load keeps its row
  * @param error the reason the last attempt failed
  */
 data class MassPlayerState(
@@ -25,5 +28,6 @@ data class MassPlayerState(
     val choosing: String? = null,
     val livePlayerId: String? = null,
     val discarded: Set<String> = emptySet(),
+    val hiddenUnavailable: Set<String> = emptySet(),
     val error: String? = null,
 )

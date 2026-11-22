@@ -12,6 +12,18 @@ import app.gubbins.mass.MassPlayer
 object MassPlayerRules {
 
     /**
+     * The players a load skips, because they read unavailable.
+     *
+     * The skip belongs to the load alone: a player that turns
+     * unavailable after the load keeps its row, and the row says so,
+     * because the watch that follows the load only refreshes what the
+     * rows show. The next load reads the list again, and a player that
+     * reads available then returns.
+     */
+    fun unavailableAtLoad(players: List<MassPlayer>): Set<String> =
+        players.filterNot { it.available }.mapTo(mutableSetOf()) { it.playerId }
+
+    /**
      * The places the sound can go.
      *
      * The server sends every player it knows about: the ones that make
@@ -32,12 +44,17 @@ object MassPlayerRules {
 
     /**
      * The rows the card shows: the targets, without the ones a swipe
-     * hid.
+     * hid and the ones the last load skipped.
      *
      * A swipe hides a row only until the refresh control runs, which
      * forgets every drop, so the card holds the whole answer of the
-     * server again.
+     * server again. An unavailable player reads the same way: the load
+     * skips it, and the next load reads the list again.
      */
-    fun visible(players: List<MassPlayer>, discarded: Set<String>): List<MassPlayer> =
-        targets(players).filterNot { it.playerId in discarded }
+    fun visible(
+        players: List<MassPlayer>,
+        discarded: Set<String>,
+        hiddenUnavailable: Set<String> = emptySet(),
+    ): List<MassPlayer> =
+        targets(players).filterNot { it.playerId in discarded || it.playerId in hiddenUnavailable }
 }
