@@ -1,5 +1,6 @@
 package app.gubbins.spindroid.ui
 
+import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -364,21 +365,33 @@ private fun PlayerRow(
  *
  * The slider holds the value the server told, and the watch moves it
  * when the loudness changes elsewhere, so the line always reads the
- * truth of the player. A drag keeps its own value until the hand lets
- * go, and the commit goes out only then. The description names the
- * player, because a screen reader meets one slider per row and the
- * label of the row alone does not say which player a slider moves.
+ * truth of the player. While a hand drags, the slider keeps its own
+ * value and commits as the hand moves, the way a physical slider moves
+ * the sound while it travels: a commit goes out on each move, but only
+ * when the last one has had its moment, and the release always commits
+ * so the last position lands. The description names the player, because
+ * a screen reader meets one slider per row and the label of the row
+ * alone does not say which player a slider moves.
  */
 @Composable
 private fun VolumeLine(player: MassPlayer, onVolume: (Int) -> Unit) {
-    // The server wins whenever it speaks and no hand holds the slider,
-    // so the remembered value keys on the loudness the server told.
-    var drag by remember(player.playerId, player.volumeLevel) { mutableStateOf<Float?>(null) }
+    // The drag keeps its own value from the first move to the release,
+    // so a read the watch makes on its own clock cannot pull the thumb
+    // back under the hand.
+    var drag by remember(player.playerId) { mutableStateOf<Float?>(null) }
+    // When the last commit went out, and the value it carried.
+    var lastCommitAt by remember(player.playerId) { mutableStateOf(0L) }
     val shown = drag ?: (player.volumeLevel ?: 0) / 100f
     val context = LocalContext.current
     Slider(
         value = shown,
-        onValueChange = { drag = it },
+        onValueChange = { value ->
+            drag = value
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastCommitAt < COMMIT_PERIOD_MILLIS) return@Slider
+            lastCommitAt = now
+            onVolume((value * 100).roundToInt())
+        },
         onValueChangeFinished = {
             drag?.let { value -> onVolume((value * 100).roundToInt()) }
             drag = null
@@ -416,3 +429,14 @@ private val GlyphSize = 40.dp
 
 /** The rounded square that the server glyph wears. */
 private val GlyphShape = RoundedCornerShape(10.dp)
+
+/**
+ * How long one commit waits before the next may go out, while a hand
+ * drags.
+ *
+ * A drag fires a move for every frame, and a commit for each of them
+ * would flood the server. The period holds the commits to a rate the
+ * ear still reads as realtime, and the release commits at once, so the
+ * last position never waits for a period.
+ */
+private const val COMMIT_PERIOD_MILLIS = 200L
