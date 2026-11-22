@@ -14,6 +14,19 @@ release page alone.
 
 <!-- The release workflow inserts every new entry below this line. -->
 
+## 2026.11.22.0 — versionCode 1, versionName 2026.11.22.0
+
+Built from `4f2b01f63ed9705d83fa9722d4637b9d34e3886b`.
+APK SHA-256: `e0617ceea781b0a06f9f06fdf0d55456864f517f32d04bf0b6de8480cfa9a200`.
+
+Commits since the previous release (`8be2284f0ef9858bae745111001c5f8a248e3ba7..4f2b01f63ed9705d83fa9722d4637b9d34e3886b`):
+
+- `4f2b01f` Turn the nightly build into a manual pre-release run
+- `2e74210` Keep the swiped rows hidden across restarts and turns of the screen
+- `ac6b89e` Say what a destination pick waits for, and keep the suite off the speakers
+- `82e3617` Move the player volume as the slider travels, not only on release
+- `e57e4a6` Quiet the phone while it streams, and drive the player volumes from the app
+
 ## Nightly 2026-11-22 — versionCode 6, versionName 2026.11.22
 
 Built from `8be2284f0ef9858bae745111001c5f8a248e3ba7`.
